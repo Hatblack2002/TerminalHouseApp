@@ -12,6 +12,8 @@ import com.example.model.SystemStats
 import com.example.model.TerminalLine
 import com.example.model.TerminalSession
 import com.example.service.AiAgentService
+import com.example.service.LinuxBootstrap
+import com.example.service.PtyBridge
 import com.example.service.SystemMonitor
 import com.example.service.TerminalEngine
 import kotlinx.coroutines.delay
@@ -63,8 +65,8 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
 
     init {
         initSession()
-        loadInitialData()
         startStatsMonitor()
+        startBootstrap()
         dismissSplashAfterDelay()
     }
 
@@ -75,8 +77,104 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    private fun app() = getApplication<Application>()
+
+    // ------------------------------------------------------------------
+    // Bootstrap REAL del rootfs (descarga + SHA256 + extracción + verificación)
+    // ------------------------------------------------------------------
+    private fun startBootstrap() {
+        viewModelScope.launch {
+            appendToActive(TerminalLine("[bootstrap] Iniciando entorno Ubuntu real (arm64/armhf según dispositivo).", LineType.SYSTEM))
+            val job = launch {
+                LinuxBootstrap.status.collect { st ->
+                    val line = when (st) {
+                        is LinuxBootstrap.Status.Downloading -> {
+                            val pct = if (st.totalBytes > 0) " (${st.downloadedBytes * 100 / st.totalBytes}%)" else ""
+                            "[bootstrap] Descargando ${st.downloadedBytes / (1024 * 1024)} MB${pct} de ${st.source}"
+                        }
+                        is LinuxBootstrap.Status.VerifyingHash -> "[bootstrap] Verificando SHA256 del rootfs..."
+                        is LinuxBootstrap.Status.Extracting -> "[bootstrap] Extrayendo rootfs (${st.processed} entradas, última: ${st.lastPath})"
+                        is LinuxBootstrap.Status.Hardening -> "[bootstrap] Configurando DNS y servicios del rootfs..."
+                        is LinuxBootstrap.Status.Checking -> "[bootstrap] Verificando estructura (bash/apt/python3/os-release/root)..."
+                        else -> null
+                    }
+                    if (line != null) appendToActive(TerminalLine(line, LineType.SYSTEM))
+                }
+            }
+            val result = LinuxBootstrap.ensure(app())
+            job.cancel()
+            when (result) {
+                is LinuxBootstrap.Status.Ready -> {
+                    appendToActive(TerminalLine("[bootstrap] SHA256 verificado y rootfs completo.", LineType.SYSTEM))
+                    appendToActive(TerminalLine("[bootstrap] SO real: ${result.info.osPrettyName} • ${result.info.dpkgPackages} paquetes dpkg • ${result.info.fileCount} archivos • ${result.info.symlinkCount} symlinks", LineType.SYSTEM))
+                    appendToActive(TerminalLine("[bootstrap] PRoot: ${PtyBridge.prootFile(app()).absolutePath}", LineType.SYSTEM))
+                    appendToActive(TerminalLine("[bootstrap] Lanzando /bin/bash --login via PRoot sobre PTY real...", LineType.SYSTEM))
+                    refreshRealData()
+                    val s = PtyBridge.ensureSession(activeSessionId(), app())
+                    if (s == null) {
+                        appendToActive(TerminalLine("[motor] No se pudo iniciar PRoot. Revisa diagnósticos.", LineType.ERROR))
+                    } else {
+                        appendToActive(TerminalLine("[motor] Sesión activa (pid=${s.getPid()}). Escribe un comando real.", LineType.SYSTEM))
+                    }
+                }
+                is LinuxBootstrap.Status.Failed -> {
+                    appendToActive(TerminalLine("[bootstrap] FALLÓ: ${result.reason}", LineType.ERROR))
+                    appendToActive(TerminalLine("[bootstrap] El entorno NO está disponible. Reintenta con: bootstrap", LineType.ERROR))
+                }
+                else -> Unit
+            }
+        }
+    }
+
+    private fun refreshRealData() {
+        viewModelScope.launch {
+            // Paquetes reales desde dpkg status
+            _uiState.update { it.copy(packages = LinuxBootstrap.loadInstalledPackages(app())) }
+            // Archivos reales de /root
+            _uiState.update { it.copy(files = realRootFiles(), currentFilePath = "/root") }
+            // Proyectos reales: directorios dentro de /root
+            val rootDir = File(LinuxBootstrap.rootfsDir(app()), "root")
+            val proys = rootDir.listFiles { f -> f.isDirectory }
+                ?.take(20)
+                ?.map { ProjectItem(UUID.randomUUID().toString(), it.name, "directorio real en /root", "/root/${it.name}", "N/D", "N/D") }
+                ?: emptyList()
+            _uiState.update { it.copy(projects = proys) }
+        }
+    }
+
+    private fun realRootFiles(): List<FileItem> {
+        val rootDir = File(LinuxBootstrap.rootfsDir(app()), "root")
+        return rootDir.listFiles()
+            ?.take(50)
+            ?.map { f ->
+                FileItem(
+                    name = f.name,
+                    path = "/root/${f.name}",
+                    isDirectory = f.isDirectory,
+                    size = if (f.isFile) humanSize(f.length()) else "N/D",
+                    permissions = realPermissions(f)
+                )
+            } ?: emptyList()
+    }
+
+    private fun humanSize(bytes: Long): String = when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "%.1f KB".format(bytes / 1024.0)
+        else -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
+    }
+
+    private fun realPermissions(f: File): String {
+        val r = if (f.canRead()) "r" else "-"
+        val w = if (f.canWrite()) "w" else "-"
+        val x = if (f.canExecute()) "x" else "-"
+        return "${if (f.isDirectory) "d" else "-"}$r$w$x$r$w$x$r$w$x"
+    }
+
+    // ------------------------------------------------------------------
+    // Sesión inicial (líneas reales de arranque, sin neofetch falso)
+    // ------------------------------------------------------------------
     private fun initSession() {
-        val initialLines = TerminalEngine.createInitialSessionLines(getApplication())
+        val initialLines = TerminalEngine.createInitialSessionLines(app())
         val defaultSession = TerminalSession(
             id = "term-1",
             title = "Terminal 1",
@@ -87,45 +185,8 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
             it.copy(
                 sessions = listOf(defaultSession),
                 activeSessionId = defaultSession.id,
-                systemStats = SystemMonitor.getRealStats(getApplication()),
+                systemStats = SystemMonitor.getRealStats(app()),
                 aiMessages = listOf(AiAgentService.getInitialGreeting())
-            )
-        }
-    }
-
-    private fun loadInitialData() {
-        val defaultProjects = listOf(
-            ProjectItem("1", "android-terminal-app", "Entorno nativo Kotlin + Compose", "/root/projects/android-terminal-app", "Kotlin", "Hoy 12:15"),
-            ProjectItem("2", "ubuntu-rootfs-builder", "Scripts de configuración de rootfs Noble", "/root/projects/ubuntu-rootfs-builder", "Shell", "Ayer 18:40"),
-            ProjectItem("3", "python-ai-agent", "Microservicio de automatización local", "/root/projects/python-ai-agent", "Python", "Hace 2 días")
-        )
-
-        val defaultPackages = listOf(
-            PackageItem("bash", "5.2.21", "GNU Bourne Again SHell", true, "1.4 MB"),
-            PackageItem("coreutils", "9.4-3ubuntu6", "GNU core utilities (ls, cat, mkdir...)", true, "3.1 MB"),
-            PackageItem("neofetch", "7.1.0-4", "Fast, highly customizable system info script", true, "115 KB"),
-            PackageItem("python3", "3.12.3", "Interactive high-level object-oriented language", true, "18.2 MB"),
-            PackageItem("git", "2.43.0", "Fast, scalable, distributed revision control system", true, "14.5 MB"),
-            PackageItem("curl", "8.5.0-2ubuntu10", "Command line tool for transferring data with URLs", true, "240 KB"),
-            PackageItem("htop", "3.3.0-4", "Interactive processes viewer", true, "178 KB"),
-            PackageItem("build-essential", "12.10ubuntu1", "Informational list of build-essential packages", false, "4.8 MB"),
-            PackageItem("nodejs", "20.12.2", "Evented I/O for V8 JavaScript", false, "32.1 MB"),
-            PackageItem("vim", "9.1.0-1ubuntu1", "Vi IMproved - enhanced vi editor", false, "2.9 MB")
-        )
-
-        val rootFiles = listOf(
-            FileItem(".bashrc", "/root/.bashrc", false, "3.8 KB", "-rw-r--r--"),
-            FileItem(".profile", "/root/.profile", false, "807 B", "-rw-r--r--"),
-            FileItem("projects", "/root/projects", true, "4.0 KB", "drwxr-xr-x"),
-            FileItem("downloads", "/root/downloads", true, "4.0 KB", "drwxr-xr-x"),
-            FileItem("terminalhouse.conf", "/root/terminalhouse.conf", false, "512 B", "-rw-r--r--")
-        )
-
-        _uiState.update {
-            it.copy(
-                projects = defaultProjects,
-                packages = defaultPackages,
-                files = rootFiles
             )
         }
     }
@@ -133,11 +194,21 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
     private fun startStatsMonitor() {
         viewModelScope.launch {
             while (isActive) {
-                val stats = SystemMonitor.getRealStats(getApplication())
+                val stats = SystemMonitor.getRealStats(app())
                 _uiState.update { it.copy(systemStats = stats) }
                 delay(4000)
             }
         }
+    }
+
+    private fun activeSessionId(): String = _uiState.value.activeSessionId
+
+    private fun activeSession(): TerminalSession? =
+        _uiState.value.sessions.find { it.id == _uiState.value.activeSessionId }
+
+    private fun appendToActive(line: TerminalLine) {
+        val s = activeSession() ?: return
+        updateSession(s.copy(lines = s.lines + line))
     }
 
     fun onInputChange(newInput: String) {
@@ -146,44 +217,21 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
 
     fun submitCommand() {
         val input = _uiState.value.currentInput.trim()
-        val activeId = _uiState.value.activeSessionId
-        val session = _uiState.value.sessions.find { it.id == activeId } ?: return
+        val activeId = activeSessionId()
+        val session = activeSession() ?: return
 
         _uiState.update { it.copy(currentInput = "") }
+        if (input.isEmpty()) return
 
         viewModelScope.launch {
-            val promptLine = TerminalLine("root@ubuntu:${session.workingDir}# $input", LineType.INPUT)
-            val updatedHistory = if (input.isNotEmpty() && !session.history.contains(input)) {
-                session.history + input
-            } else session.history
+            val updatedHistory = if (!session.history.contains(input)) session.history + input else session.history
+            updateSession(session.copy(history = updatedHistory))
 
-            val currentLines = session.lines.toMutableList()
-            currentLines.add(promptLine)
+            val result = TerminalEngine.executeCommand(input, session.workingDir, app(), activeId)
 
-            if (input.isEmpty()) {
-                val updatedSession = session.copy(
-                    lines = currentLines,
-                    history = updatedHistory
-                )
-                updateSession(updatedSession)
-                return@launch
-            }
-
-            val result = TerminalEngine.executeCommand(input, session.workingDir, getApplication())
-
-            val finalLines = if (result.shouldClear) {
-                emptyList()
-            } else {
-                currentLines + result.lines
-            }
-
-            val updatedSession = session.copy(
-                lines = finalLines,
-                workingDir = result.newDir,
-                history = updatedHistory,
-                historyIndex = -1
-            )
-            updateSession(updatedSession)
+            val current = _uiState.value.sessions.find { it.id == activeId } ?: return@launch
+            val finalLines = if (result.shouldClear) emptyList() else current.lines + result.lines
+            updateSession(current.copy(lines = finalLines))
         }
     }
 
@@ -199,8 +247,7 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
             id = newSessionId,
             title = "Terminal $count",
             lines = listOf(
-                TerminalLine("TerminalHouse Session $count - Ubuntu 24.04.5 LTS", LineType.SYSTEM),
-                TerminalLine("Type 'help' for built-in tools.", LineType.OUTPUT)
+                TerminalLine("[TerminalHouse] Nueva sesión PTY real (PRoot + Ubuntu).", LineType.SYSTEM)
             ),
             workingDir = "~"
         )
@@ -209,6 +256,9 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
                 sessions = it.sessions + newSession,
                 activeSessionId = newSessionId
             )
+        }
+        viewModelScope.launch {
+            PtyBridge.ensureSession(newSessionId, app())
         }
     }
 
@@ -219,34 +269,34 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
     fun closeSession(sessionId: String) {
         val currentSessions = _uiState.value.sessions
         if (currentSessions.size <= 1) {
-            // Don't close the only session, just reset it
-            val initialLines = TerminalEngine.createInitialSessionLines(getApplication())
-            val resetSession = currentSessions.first().copy(lines = initialLines, workingDir = "~")
-            updateSession(resetSession)
+            // No cerrar la única sesión: reiniciar su vista y su shell
+            PtyBridge.closeSession(sessionId)
+            val reset = currentSessions.first().copy(
+                lines = TerminalEngine.createInitialSessionLines(app()),
+                workingDir = "~",
+                history = emptyList(),
+                historyIndex = -1
+            )
+            updateSession(reset)
+            viewModelScope.launch { PtyBridge.ensureSession(sessionId, app()) }
             return
         }
 
+        PtyBridge.closeSession(sessionId)
         val remaining = currentSessions.filter { it.id != sessionId }
         val newActiveId = if (_uiState.value.activeSessionId == sessionId) {
             remaining.last().id
         } else {
             _uiState.value.activeSessionId
         }
-
         _uiState.update {
-            it.copy(
-                sessions = remaining,
-                activeSessionId = newActiveId
-            )
+            it.copy(sessions = remaining, activeSessionId = newActiveId)
         }
     }
 
     private fun updateSession(updated: TerminalSession) {
         _uiState.update { state ->
-            val updatedList = state.sessions.map {
-                if (it.id == updated.id) updated else it
-            }
-            state.copy(sessions = updatedList)
+            state.copy(sessions = state.sessions.map { if (it.id == updated.id) updated else it })
         }
     }
 
@@ -254,43 +304,25 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
         _uiState.update { it.copy(isKeyboardVisible = !it.isKeyboardVisible) }
     }
 
+    /**
+     * Teclas de control: se escriben CRUDAS al PTY (bytes reales), como un terminal real.
+     * Ctrl+C interrumpe el proceso en primer plano del rootfs; flechas recorren el
+     * historial de bash real; TAB completa en el shell real.
+     */
     fun insertSpecialKey(keyText: String) {
-        val current = _uiState.value.currentInput
         when (keyText) {
-            "TAB" -> _uiState.update { it.copy(currentInput = current + "    ") }
-            "ESC" -> _uiState.update { it.copy(currentInput = "") }
             "CTRL+C" -> {
-                val activeId = _uiState.value.activeSessionId
-                val session = _uiState.value.sessions.find { it.id == activeId }
-                if (session != null) {
-                    val lines = session.lines + TerminalLine("root@ubuntu:${session.workingDir}# ^C", LineType.INPUT)
-                    updateSession(session.copy(lines = lines))
-                }
+                PtyBridge.writeRaw(activeSessionId(), byteArrayOf(0x03))
                 _uiState.update { it.copy(currentInput = "") }
             }
+            "CTRL+D" -> PtyBridge.writeRaw(activeSessionId(), byteArrayOf(0x04))
+            "ESC" -> PtyBridge.writeRaw(activeSessionId(), byteArrayOf(0x1B))
+            "TAB" -> PtyBridge.writeRaw(activeSessionId(), byteArrayOf(0x09))
+            "UP" -> PtyBridge.writeRaw(activeSessionId(), "\u001B[A".toByteArray(Charsets.UTF_8))
+            "DOWN" -> PtyBridge.writeRaw(activeSessionId(), "\u001B[B".toByteArray(Charsets.UTF_8))
             "CLEAR" -> executeQuickCommand("clear")
-            "UP" -> navigateHistory(up = true)
-            "DOWN" -> navigateHistory(up = false)
-            else -> _uiState.update { it.copy(currentInput = current + keyText) }
+            else -> _uiState.update { it.copy(currentInput = _uiState.value.currentInput + keyText) }
         }
-    }
-
-    private fun navigateHistory(up: Boolean) {
-        val activeId = _uiState.value.activeSessionId
-        val session = _uiState.value.sessions.find { it.id == activeId } ?: return
-        if (session.history.isEmpty()) return
-
-        var newIndex = if (up) {
-            if (session.historyIndex == -1) session.history.size - 1 else (session.historyIndex - 1).coerceAtLeast(0)
-        } else {
-            if (session.historyIndex == -1) -1 else (session.historyIndex + 1)
-        }
-
-        if (newIndex >= session.history.size) newIndex = -1
-
-        val command = if (newIndex in session.history.indices) session.history[newIndex] else ""
-        updateSession(session.copy(historyIndex = newIndex))
-        _uiState.update { it.copy(currentInput = command) }
     }
 
     fun toggleSystemDialog(show: Boolean) {
@@ -326,14 +358,9 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
             isUser = true,
             text = textToSend
         )
-
         _uiState.update {
-            it.copy(
-                aiMessages = it.aiMessages + userMessage,
-                aiInputText = ""
-            )
+            it.copy(aiMessages = it.aiMessages + userMessage, aiInputText = "")
         }
-
         viewModelScope.launch {
             delay(300)
             val response = AiAgentService.processQuery(textToSend)
@@ -342,10 +369,8 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun installPackage(pkg: PackageItem) {
-        val updated = _uiState.value.packages.map {
-            if (it.name == pkg.name) it.copy(isInstalled = true) else it
-        }
-        _uiState.update { it.copy(packages = updated) }
-        executeQuickCommand("apt install ${pkg.name}")
+        // NO se marca "instalado" por adelantado: el estado real lo decide apt.
+        // El comando se ejecuta de verdad dentro del rootfs vía PTY.
+        executeQuickCommand("apt install -y ${pkg.name}")
     }
 }

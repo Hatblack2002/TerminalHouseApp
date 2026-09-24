@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import com.example.service.SystemMonitor
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -98,7 +99,7 @@ fun DrawerContent(
                             )
                         }
                         Text(
-                            text = "Ubuntu 24.04.5 LTS • ARM64",
+                            text = SystemMonitor.identitySummaryCached(),
                             color = TextSecondaryDark,
                             fontSize = 10.sp
                         )

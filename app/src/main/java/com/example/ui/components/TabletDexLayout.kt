@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import com.example.service.SystemMonitor
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -184,7 +185,7 @@ fun TabletDexLayout(
                             )
                         }
                         Text(
-                            text = "Ubuntu 24.04.5 LTS • ARM64",
+                            text = SystemMonitor.identitySummaryCached(),
                             color = TextSecondaryDark,
                             fontSize = 11.sp
                         )
@@ -407,7 +408,7 @@ fun TabletDexLayout(
                                         icon = Icons.Default.PlayArrow,
                                         label = "Ejecutar comando",
                                         modifier = Modifier.weight(1f),
-                                        onClick = { onQuickAction("neofetch") }
+                                        onClick = { onQuickAction("cat /etc/os-release") }
                                     )
                                     QuickAccessTile(
                                         icon = Icons.Default.Folder,

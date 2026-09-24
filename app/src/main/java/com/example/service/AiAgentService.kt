@@ -37,8 +37,8 @@ object AiAgentService {
                 AiMessage(
                     id = UUID.randomUUID().toString(),
                     isUser = false,
-                    text = "Puedes ejecutar cualquier comando Linux estándar en la terminal. Aquí tienes un comando para ver el estado detallado del sistema:",
-                    suggestedCommand = "neofetch"
+                    text = "Puedes ejecutar cualquier comando Linux estándar en la terminal. Aquí tienes uno para ver la identidad real del sistema:",
+                    suggestedCommand = "cat /etc/os-release && uname -a"
                 )
             }
             lower.contains("analizar") || lower.contains("archivo") -> {
@@ -53,8 +53,8 @@ object AiAgentService {
                 AiMessage(
                     id = UUID.randomUUID().toString(),
                     isUser = false,
-                    text = "¡Excelente elección! Neofetch te muestra los detalles visuales de la distribución Ubuntu 24.04.5 LTS.",
-                    suggestedCommand = "neofetch"
+                    text = "neofetch no viene instalado en el rootfs base. Para ver la distribución REAL ejecuta:",
+                    suggestedCommand = "cat /etc/os-release"
                 )
             }
             else -> {

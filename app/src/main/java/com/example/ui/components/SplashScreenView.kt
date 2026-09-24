@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.animation.core.LinearEasing
+import com.example.service.SystemMonitor
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -119,7 +120,7 @@ fun SplashScreenView(modifier: Modifier = Modifier) {
 
             // Subtitle
             Text(
-                text = "Ubuntu 24.04.5 LTS • ARM64",
+                text = SystemMonitor.identitySummaryCached(),
                 color = Color(0xFFA0A0B0),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium

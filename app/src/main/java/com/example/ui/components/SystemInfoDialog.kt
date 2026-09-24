@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.model.SystemStats
+import com.example.service.LinuxBootstrap
+import com.example.service.PtyBridge
 import com.example.ui.theme.AccentOrange
 import com.example.ui.theme.TextPrimaryDark
 import com.example.ui.theme.TextSecondaryDark
@@ -49,6 +52,8 @@ fun SystemInfoDialog(
     onDismiss: () -> Unit
 ) {
     if (stats == null) return
+
+    val context = LocalContext.current
 
     BasicAlertDialog(
         onDismissRequest = onDismiss,
@@ -211,11 +216,16 @@ fun SystemInfoDialog(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        KeyValueRow(key = "Versión", value = stats.osVersion)
+                        KeyValueRow(key = "SO rootfs", value = stats.osVersion)
                         KeyValueRow(key = "Arquitectura", value = stats.architecture)
-                        KeyValueRow(key = "Rootfs", value = "${stats.rootfsSizeMb} MB")
+                        KeyValueRow(key = "Rootfs", value = "${stats.rootfsSizeMb} MB • ${LinuxBootstrap.metrics(context).fileCount} archivos")
                         KeyValueRow(key = "Procesos", value = "${stats.processCount}")
-                        KeyValueRow(key = "PID", value = "${stats.pid}")
+                        KeyValueRow(key = "PID app", value = "${stats.pid}")
+                        Spacer(modifier = Modifier.height(10.dp))
+                        // Diagnósticos REALES del motor (Fase 9): sin valores inventados
+                        PtyBridge.diagnostics(context, "term-1").forEach { (k, v) ->
+                            KeyValueRow(key = k, value = if (v.length > 160) v.take(160) + "…" else v)
+                        }
                     }
                 }
             }

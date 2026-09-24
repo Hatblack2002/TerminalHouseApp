@@ -33,14 +33,14 @@ data class SystemStats(
     val storageUsedPercent: Int,
     val storageTotalGb: Double,
     val storageUsedGb: Double,
-    val osVersion: String = "24.04.5 LTS",
-    val architecture: String = "aarch64",
-    val rootfsSizeMb: Double = 238.77,
-    val processCount: Int = 4,
-    val pid: Int = 4827,
-    val kernelVersion: String = "5.15.148-android13-8-00001",
-    val uptimeMinutes: Long = 6,
-    val packagesCount: Int = 52
+    val osVersion: String = "N/D",
+    val architecture: String = "N/D",
+    val rootfsSizeMb: Double = 0.0,
+    val processCount: Int = 1,
+    val pid: Int = 0,
+    val kernelVersion: String = "N/D",
+    val uptimeMinutes: Long = 0,
+    val packagesCount: Int = 0
 )
 
 data class AiMessage(
@@ -73,5 +73,5 @@ data class PackageItem(
     val version: String,
     val description: String,
     val isInstalled: Boolean = true,
-    val size: String = "1.2 MB"
+    val size: String = "N/D"
 )

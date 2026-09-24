@@ -1,6 +1,7 @@
 package com.example
 
 import android.os.Bundle
+import com.example.service.SystemMonitor
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -418,7 +419,7 @@ private fun PortraitTopBar(
                     )
                 }
                 Text(
-                    text = "Ubuntu 24.04.5 LTS • ARM64",
+                    text = SystemMonitor.identitySummaryCached(),
                     color = TextSecondaryDark,
                     fontSize = 10.5.sp
                 )

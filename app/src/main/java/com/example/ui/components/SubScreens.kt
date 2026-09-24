@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import com.example.service.SystemMonitor
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -399,7 +400,7 @@ fun ToolsScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         val toolItems = listOf(
-            Triple("Información Neofetch", "Muestra resumen visual completo del sistema", "neofetch"),
+            Triple("Información del sistema", "Muestra la distribución real del rootfs", "cat /etc/os-release"),
             Triple("Uso de Memoria (free)", "Inspecciona memoria libre y búferes", "free -h"),
             Triple("Kernel y Arquitectura (uname)", "Detalles del kernel Linux y plataforma", "uname -a"),
             Triple("Espacio en Disco (df)", "Espacio libre en rootfs y particiones", "df -h"),
@@ -548,7 +549,7 @@ fun SettingsScreen(
                             fontWeight = FontWeight.Medium
                         )
                         Text(
-                            text = "/bin/bash (Ubuntu 24.04 LTS)",
+                            text = "/bin/bash (${if (SystemMonitor.lastRootfsReady) SystemMonitor.lastOsPrettyName else "no verificado"})",
                             color = AccentOrange,
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace

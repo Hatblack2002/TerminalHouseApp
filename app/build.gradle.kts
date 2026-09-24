@@ -16,10 +16,15 @@ android {
     applicationId = "com.aistudio.terminalhouse.tmhx"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 2
+    versionName = "1.1-real-ubuntu"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    ndk {
+      // Fase 11: ambas ABIs objetivo, ninguna descartada
+      abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+    }
   }
 
   signingConfigs {
@@ -56,6 +61,21 @@ android {
     buildConfig = true
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
+
+  // PRoot y librerías del motor se extraen a nativeLibraryDir (necesario para
+  // execve de binarios: targetSdk 29+ no permite exec desde data dir).
+  packaging {
+    jniLibs {
+      useLegacyPackaging = true
+      keepDebugSymbols += listOf(
+        "**/libproot.so",
+        "**/libtalloc.so",
+        "**/libloader.so",
+        "**/libloader32.so",
+        "**/libandroid-shmem.so"
+      )
+    }
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
@@ -118,6 +138,9 @@ dependencies {
   implementation(libs.okhttp)
   // Motor de terminal real (termux-app GPLv3 renombrado): PTY nativo vía libtermux.so
   implementation(project(":terminal"))
+  // Bootstrap real del rootfs Ubuntu 24.04: extracción tar.xz con symlinks/permisos
+  implementation("org.apache.commons:commons-compress:1.26.2")
+  implementation("org.tukaani:xz:1.9")
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)

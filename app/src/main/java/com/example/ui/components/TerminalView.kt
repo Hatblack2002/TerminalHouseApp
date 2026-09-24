@@ -151,7 +151,7 @@ fun TerminalView(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "root@ubuntu:${activeSession.workingDir}# ",
+                                    text = "\u276F ",
                                     color = TerminalGreen,
                                     style = TerminalTextStyle.copy(fontWeight = FontWeight.Bold)
                                 )
@@ -261,10 +261,10 @@ fun TerminalView(
                                 modifier = Modifier.background(Color(0xFF1E1E26))
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("neofetch", color = Color(0xFFE0E0E0)) },
+                                    text = { Text("cat /etc/os-release", color = Color(0xFFE0E0E0)) },
                                     onClick = {
                                         showQuickMenu = false
-                                        onQuickAction("neofetch")
+                                        onQuickAction("cat /etc/os-release")
                                     }
                                 )
                                 DropdownMenuItem(
@@ -404,47 +404,8 @@ private fun TerminalLineItem(line: TerminalLine) {
             )
         }
         LineType.ASCII_ART -> {
-            val styledText = remember(line.text) {
-                buildAnnotatedString {
-                    val text = line.text
-                    val parts = text.split("root@ubuntu", "OS:", "Host:", "Uptime:", "Packages:", "Shell:", "CPU:", "Memory:", "■")
-                    if (text.contains("root@ubuntu")) {
-                        val idx = text.indexOf("root@ubuntu")
-                        append(text.substring(0, idx))
-                        pushStyle(SpanStyle(color = AccentOrange, fontWeight = FontWeight.Bold))
-                        append("root@ubuntu")
-                        pop()
-                    } else if (text.contains("OS:") || text.contains("Host:") || text.contains("Uptime:") ||
-                        text.contains("Packages:") || text.contains("Shell:") || text.contains("CPU:") || text.contains("Memory:")) {
-                        val colonIdx = text.indexOf(":")
-                        val prefix = text.substring(0, colonIdx + 1)
-                        val suffix = text.substring(colonIdx + 1)
-                        append(prefix)
-                        pushStyle(SpanStyle(color = Color(0xFFE0E0E0)))
-                        append(suffix)
-                        pop()
-                    } else if (text.contains("■")) {
-                        val blockIdx = text.indexOf("■")
-                        append(text.substring(0, blockIdx))
-                        val colors = listOf(
-                            Color(0xFF1E1E1E), Color(0xFFEF4444), Color(0xFF22C55E),
-                            Color(0xFFEAB308), Color(0xFF3B82F6), Color(0xFFA855F7),
-                            Color(0xFF06B6D4), Color(0xFFE0E0E0)
-                        )
-                        colors.forEach { c ->
-                            pushStyle(SpanStyle(color = c))
-                            append("■")
-                            pop()
-                        }
-                    } else {
-                        pushStyle(SpanStyle(color = AccentOrange))
-                        append(text)
-                        pop()
-                    }
-                }
-            }
             Text(
-                text = styledText,
+                text = line.text,
                 color = AccentOrange,
                 style = TerminalTextStyle
             )

@@ -25,29 +25,39 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `test terminal initial session output`() {
+    fun `initial session lines do not fake ubuntu identity`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val lines = TerminalEngine.createInitialSessionLines(context)
         assertTrue(lines.isNotEmpty())
-        assertTrue(lines.any { it.text.contains("neofetch") })
-        assertTrue(lines.any { it.text.contains("Ubuntu 24.04.5") })
+        // Fase 8: la UI inicial no fabrica datos de Ubuntu
+        assertTrue(lines.none { it.text.contains("neofetch") })
+        assertTrue(lines.none { it.text.contains("root@ubuntu") })
+        assertTrue(lines.none { it.text.contains("24.04.5") })
     }
 
     @Test
-    fun `test terminal command execution`() = runBlocking {
+    fun `engine without session reports real bootstrap state instead of fake output`() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val result = TerminalEngine.executeCommand("uname -a", "~", context)
         assertNotNull(result)
-        assertTrue(result.lines.any { it.text.contains("Linux") })
+        // Sin rootfs ni PRoot disponibles, el motor informa el estado real del bootstrap
+        assertTrue(result.lines.any { it.text.contains("[motor]") })
     }
 
     @Test
-    fun `test system monitor real stats`() {
+    fun `system monitor reports only real values`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val stats = SystemMonitor.getRealStats(context)
         assertNotNull(stats)
-        assertTrue(stats.osVersion.contains("24.04.5"))
-        assertTrue(stats.ramUsedPercent > 0)
-        assertTrue(stats.storageUsedPercent > 0)
+        // Sin rootfs en Robolectric: N/D real, nunca un valor inventado
+        assertEquals("N/D", stats.osVersion)
+        assertEquals(0, stats.packagesCount)
+        assertEquals(0.0, stats.rootfsSizeMb, 0.001)
+        // RAM y almacenamiento consistentes con lo que reporta la plataforma (Robolectric: valores por defecto)
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val mi = android.app.ActivityManager.MemoryInfo()
+        am.getMemoryInfo(mi)
+        assertEquals(mi.totalMem / (1024 * 1024), stats.ramTotalMb)
+        assertTrue(stats.storageUsedPercent >= 1)
     }
 }
