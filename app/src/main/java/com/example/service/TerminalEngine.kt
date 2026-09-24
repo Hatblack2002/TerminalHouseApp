@@ -178,27 +178,38 @@ object TerminalEngine {
                 output.add(TerminalLine("bin  boot  dev  etc  home  lib  lib64  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var", LineType.OUTPUT))
             }
             else -> {
-                // Try executing using system shell
-                try {
-                    val process = ProcessBuilder("/system/bin/sh", "-c", trimmed)
-                        .directory(context.filesDir)
-                        .redirectErrorStream(true)
-                        .start()
-
-                    val reader = BufferedReader(InputStreamReader(process.inputStream))
-                    var line: String? = reader.readLine()
-                    var count = 0
-                    while (line != null && count < 50) {
-                        output.add(TerminalLine(line, LineType.OUTPUT))
-                        line = reader.readLine()
-                        count++
+                // Motor real primero: PTY nativo vía :terminal (libtermux.so, termux-app GPLv3).
+                // Solo si el motor nativo no está disponible se conserva el fallback histórico.
+                val ptyLines = PtyBridge.runCommand(trimmed, context)
+                if (ptyLines != null) {
+                    if (ptyLines.isEmpty()) {
+                        output.add(TerminalLine("", LineType.OUTPUT))
+                    } else {
+                        output.addAll(ptyLines)
                     }
-                    process.waitFor()
-                    if (output.isEmpty() && process.exitValue() != 0) {
+                } else {
+                    // Try executing using system shell
+                    try {
+                        val process = ProcessBuilder("/system/bin/sh", "-c", trimmed)
+                            .directory(context.filesDir)
+                            .redirectErrorStream(true)
+                            .start()
+
+                        val reader = BufferedReader(InputStreamReader(process.inputStream))
+                        var line: String? = reader.readLine()
+                        var count = 0
+                        while (line != null && count < 50) {
+                            output.add(TerminalLine(line, LineType.OUTPUT))
+                            line = reader.readLine()
+                            count++
+                        }
+                        process.waitFor()
+                        if (output.isEmpty() && process.exitValue() != 0) {
+                            output.add(TerminalLine("bash: $cmd: command not found", LineType.ERROR))
+                        }
+                    } catch (e: Exception) {
                         output.add(TerminalLine("bash: $cmd: command not found", LineType.ERROR))
                     }
-                } catch (e: Exception) {
-                    output.add(TerminalLine("bash: $cmd: command not found", LineType.ERROR))
                 }
             }
         }

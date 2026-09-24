@@ -18,3 +18,12 @@ local.properties
 debug.keystore
 debug.keystore.base64
 .build-outputs/
+
+# Claves de firma (nunca en el repo)
+my-upload-key.jks
+*.jks
+!debug.keystore
+.env
+
+build/
+.externalNativeBuild/

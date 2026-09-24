@@ -25,3 +25,4 @@ dependencyResolutionManagement {
 rootProject.name = "TerminalHouse"
 
 include(":app")
+include(":terminal")
