@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Chimney -->
+    <path
+        android:fillColor="#E95420"
+        android:pathData="M34,14h5v10h-5z" />
+    <!-- Outer House Roof / Frame -->
+    <path
+        android:fillColor="#E95420"
+        android:pathData="M24,4 L3,21 L8,25 L24,12 L40,25 L45,21 Z" />
+    <!-- House Body Frame -->
+    <path
+        android:fillColor="#E95420"
+        android:pathData="M8,22 L8,42 C8,43.1 8.9,44 10,44 L38,44 C39.1,44 40,43.1 40,42 L40,22 Z" />
+    <!-- Interior Dark Screen -->
+    <path
+        android:fillColor="#141418"
+        android:pathData="M11,21 L37,21 C38.1,21 39,21.9 39,23 L39,41 C39,42.1 38.1,43 37,43 L11,43 C9.9,43 9,42.1 9,41 L9,23 C9,21.9 9.9,21 11,21 Z" />
+    <!-- Terminal Prompt > -->
+    <path
+        android:fillColor="#E95420"
+        android:pathData="M15,27 L22,32 L15,37 L17,39 L26,32 L17,25 Z" />
+    <!-- Terminal Prompt _ Cursor -->
+    <path
+        android:fillColor="#E95420"
+        android:pathData="M27,37 L34,37 L34,39 L27,39 Z" />
+</vector>
