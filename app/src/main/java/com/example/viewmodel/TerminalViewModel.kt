@@ -16,6 +16,7 @@ import com.example.service.LinuxBootstrap
 import com.example.service.PtyBridge
 import com.example.service.SystemMonitor
 import com.example.service.TerminalEngine
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -98,7 +99,15 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
                         is LinuxBootstrap.Status.Checking -> "[bootstrap] Verificando estructura (bash/apt/python3/os-release/root)..."
                         else -> null
                     }
-                    if (line != null) appendToActive(TerminalLine(line, LineType.SYSTEM))
+                    if (line != null) {
+                        // Progreso (Descargando/Extrayendo): actualiza UNA línea viva en
+                        // lugar de inundar el terminal con cientos de líneas.
+                        if (line.startsWith("[bootstrap] Descargando") || line.startsWith("[bootstrap] Extrayendo")) {
+                            appendProgress(line)
+                        } else {
+                            appendToActive(TerminalLine(line, LineType.SYSTEM))
+                        }
+                    }
                 }
             }
             val result = LinuxBootstrap.ensure(app())
@@ -127,7 +136,7 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun refreshRealData() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             // Paquetes reales desde dpkg status
             _uiState.update { it.copy(packages = LinuxBootstrap.loadInstalledPackages(app())) }
             // Archivos reales de /root
@@ -192,7 +201,9 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun startStatsMonitor() {
-        viewModelScope.launch {
+        // IO: getRealStats mide el rootfs real (recorrido de ~25k archivos tras el
+        // bootstrap); en el hilo principal congelaba la UI cada 4 s.
+        viewModelScope.launch(Dispatchers.IO) {
             while (isActive) {
                 val stats = SystemMonitor.getRealStats(app())
                 _uiState.update { it.copy(systemStats = stats) }
@@ -211,6 +222,20 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
         updateSession(s.copy(lines = s.lines + line))
     }
 
+    /** Línea de progreso vivo: reemplaza la última si también era progreso, si no, añade. */
+    private fun appendProgress(text: String) {
+        val s = activeSession() ?: return
+        val last = s.lines.lastOrNull()
+        val updated = if (last != null &&
+            (last.text.startsWith("[bootstrap] Descargando") || last.text.startsWith("[bootstrap] Extrayendo"))
+        ) {
+            s.copy(lines = s.lines.dropLast(1) + TerminalLine(text, LineType.SYSTEM))
+        } else {
+            s.copy(lines = s.lines + TerminalLine(text, LineType.SYSTEM))
+        }
+        updateSession(updated)
+    }
+
     fun onInputChange(newInput: String) {
         _uiState.update { it.copy(currentInput = newInput) }
     }
@@ -226,6 +251,15 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val updatedHistory = if (!session.history.contains(input)) session.history + input else session.history
             updateSession(session.copy(history = updatedHistory))
+
+            // 'bootstrap' REAL: si el entorno no está listo, relanza el bootstrap de
+            // verdad (antes el mensaje "Reintenta con: bootstrap" era un callejón sin
+            // salida: el comando solo llegaba al PTY inexistente).
+            if (input == "bootstrap" && !LinuxBootstrap.isReady(app())) {
+                appendToActive(TerminalLine("[TerminalHouse] Reintentando bootstrap real (descarga + SHA256 + extracción)...", LineType.SYSTEM))
+                startBootstrap()
+                return@launch
+            }
 
             val result = TerminalEngine.executeCommand(input, session.workingDir, app(), activeId)
 

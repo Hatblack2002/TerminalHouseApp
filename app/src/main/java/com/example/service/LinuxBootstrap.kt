@@ -41,8 +41,14 @@ object LinuxBootstrap {
     // de cloud-images.ubuntu.com el 2026-09-24 y contra los artefactos locales).
     // ---------------------------------------------------------------------
     object RootfsSpec {
+        // Primario: alias "24.04" (sirve 302 -> noble). Verificado 2026-09-25:
+        // HTTP 200 con accept-ranges: bytes (arm64 217899756 B, armhf 200528936 B).
         const val BASE_URL = "https://cloud-images.ubuntu.com/releases/24.04/release/"
-        const val MIRROR_URL = "https://mirrors.edge.kernel.org/ubuntu-cloud-images/releases/24.04/release/"
+        // Secundario: ruta canónica "noble" en el mismo CDN (protege contra rotura
+        // del alias). NOTA REAL 2026-09-25: mirrors.edge.kernel.org, mirrors.tuna
+        // y mirrors.ustc devuelven 404 para ubuntu-cloud-images (dejaron de espejarlo);
+        // no se incluyen espejos muertos.
+        const val MIRROR_URL = "https://cloud-images.ubuntu.com/releases/noble/release/"
         const val FILE_ARM64 = "ubuntu-24.04-server-cloudimg-arm64-root.tar.xz"
         const val FILE_ARMHF = "ubuntu-24.04-server-cloudimg-armhf-root.tar.xz"
         const val SHA256_ARM64 = "8482f421d456576ac5fa1f01a572846b6b7356ee5a4f58b895920e3118c2f9e7"
@@ -84,6 +90,9 @@ object LinuxBootstrap {
     fun readyMarker(context: Context): File = File(context.filesDir, "ubuntu.ready")
     fun archiveFile(context: Context): File = File(context.filesDir, "ubuntu-rootfs.tar.xz")
 
+    /** Descarga parcial reanudable; solo existe mientras la descarga no ha terminado. */
+    fun partFile(context: Context): File = File(context.filesDir, "ubuntu-rootfs.tar.xz.part")
+
     fun isReady(context: Context): Boolean =
         readyMarker(context).exists() && quickVerify(context)
 
@@ -100,6 +109,14 @@ object LinuxBootstrap {
      * Idempotente: descarga+extrae+verifica si hace falta. Devuelve el estado final real.
      */
     suspend fun ensure(context: Context): Status = mutex.withLock {
+        // FIX NetworkOnMainThreadException: TODO el trabajo bloqueante (red, SHA256,
+        // extracción de ~25k archivos) corre en IO. Antes solo fetchOfficialSha256
+        // estaba en IO: en dispositivo la descarga lanzaba NetworkOnMainThreadException
+        // (su message es null) => "Descarga falló en todos los orígenes: null".
+        withContext(Dispatchers.IO) { ensureNow(context) }
+    }
+
+    private suspend fun ensureNow(context: Context): Status {
         val appContext = context.applicationContext
         if (isReady(appContext)) {
             val info = metrics(appContext, force = true)
@@ -112,27 +129,40 @@ object LinuxBootstrap {
             val fileName = RootfsSpec.fileForAbi(abi)
             val expectedSha = RootfsSpec.sha256ForAbi(abi)
 
-            // 1) Descargar (o reutilizar archivo completo ya descargado)
+            // 1) Descargar (reanudable) o reutilizar el archivo completo ya descargado
             val archive = archiveFile(appContext)
             val sha: String
+            var hashSource = "embebido"
             if (archive.exists() && archive.length() > 0L) {
                 _status.value = Status.VerifyingHash
-                sha = sha256(archive)
-            } else {
-                sha = downloadWithMirrors(appContext, fileName, archive)
-            }
-
-            // 2) Verificar SHA256: primero embebido; si difiere, contra SHA256SUMS oficial
-            var hashSource = "embebido"
-            if (!sha.equals(expectedSha, ignoreCase = true)) {
-                _status.value = Status.VerifyingHash
-                val official = fetchOfficialSha256(fileName)
-                if (official == null || !sha.equals(official, ignoreCase = true)) {
-                    archive.delete()
-                    return fail("SHA256 no coincide. local=$sha esperado(embebido)=$expectedSha oficial=$official")
+                val local = sha256(archive)
+                if (local.equals(expectedSha, ignoreCase = true)) {
+                    sha = local
                 } else {
-                    hashSource = "SHA256SUMS oficial (imagen regenerada por upstream)"
+                    // ¿Imagen regenerada por upstream o archivo local corrupto?
+                    val official = fetchOfficialSha256(fileName)
+                    if (official != null && local.equals(official, ignoreCase = true)) {
+                        sha = local
+                        hashSource = "SHA256SUMS oficial (imagen regenerada por upstream)"
+                    } else {
+                        // Corrupto/truncado: NO se maquilla, se descarta y se re-descarga
+                        archive.delete()
+                        partFile(appContext).delete()
+                        val (s2, src2) = downloadVerified(appContext, fileName, archive, expectedSha)
+                        if (src2.isEmpty()) {
+                            return fail("SHA256 no coincide tras re-descarga. local=$s2 esperado(embebido)=$expectedSha")
+                        }
+                        sha = s2
+                        hashSource = src2
+                    }
                 }
+            } else {
+                val (s1, src1) = downloadVerified(appContext, fileName, archive, expectedSha)
+                if (src1.isEmpty()) {
+                    return fail("SHA256 no coincide tras descarga. local=$s1 esperado(embebido)=$expectedSha")
+                }
+                sha = s1
+                hashSource = src1
             }
 
             // 3) Extraer (rootfs parcial previo sin marker se elimina)
@@ -161,9 +191,9 @@ object LinuxBootstrap {
             archive.delete()
             val st = Status.Ready(info)
             _status.value = st
-            st
+            return st
         } catch (t: Throwable) {
-            fail("${t.javaClass.simpleName}: ${t.message ?: "error desconocido"}")
+            return fail("${t.javaClass.simpleName}: ${t.message ?: "error desconocido"}")
         }
     }
 
@@ -173,45 +203,112 @@ object LinuxBootstrap {
     }
 
     // ------------------------------------------------------------------
-    // Descarga
+    // Descarga real: reanudación (.part + HTTP Range), errores verídicos por
+    // origen y progreso con límite de frecuencia. Nada inventado.
     // ------------------------------------------------------------------
-    private fun downloadWithMirrors(context: Context, fileName: String, dest: File): String {
-        var lastError: Exception? = null
-        for (base in listOf(RootfsSpec.BASE_URL, RootfsSpec.MIRROR_URL)) {
-            try {
-                download(context, base + fileName, dest, base)
-                return sha256(dest)
-            } catch (e: Exception) {
-                lastError = e
-                dest.delete()
-            }
+
+    /** Descarga (reanudable) + verificación SHA256 real. Devuelve (sha, fuente); fuente "" = no verificó. */
+    private suspend fun downloadVerified(
+        context: Context, fileName: String, archive: File, expectedSha: String
+    ): Pair<String, String> {
+        val sha = downloadWithMirrors(context, fileName, archive)
+        if (sha.equals(expectedSha, ignoreCase = true)) return sha to "embebido"
+        _status.value = Status.VerifyingHash
+        val official = fetchOfficialSha256(fileName)
+        if (official != null && sha.equals(official, ignoreCase = true)) {
+            return sha to "SHA256SUMS oficial (imagen regenerada por upstream)"
         }
-        throw IllegalStateException("Descarga falló en todos los orígenes: ${lastError?.message}")
+        // No verificó: descartar restos para que no se reutilicen
+        archive.delete()
+        partFile(context).delete()
+        return sha to ""
     }
 
-    private fun download(context: Context, urlStr: String, dest: File, source: String) {
-        val conn = URL(urlStr).openConnection() as HttpURLConnection
-        conn.connectTimeout = 20000
-        conn.readTimeout = 60000
-        conn.instanceFollowRedirects = true
-        conn.connect()
-        if (conn.responseCode !in 200..299) throw IllegalStateException("HTTP ${conn.responseCode} en $urlStr")
-        val total = conn.contentLengthLong
-        dest.parentFile?.mkdirs()
-        var done = 0L
-        conn.inputStream.use { input ->
-            FileOutputStream(dest).use { out ->
-                val buf = ByteArray(64 * 1024)
-                while (true) {
-                    val n = input.read(buf)
-                    if (n < 0) break
-                    out.write(buf, 0, n)
-                    done += n
-                    _status.value = Status.Downloading(done, if (total > 0) total else -1, source)
+    private fun downloadWithMirrors(context: Context, fileName: String, dest: File): String {
+        val part = partFile(context)
+        val errors = mutableListOf<String>()
+        for (base in listOf(RootfsSpec.BASE_URL, RootfsSpec.MIRROR_URL)) {
+            try {
+                download(base + fileName, part, base)
+                if (part.length() <= 0L) throw IllegalStateException("archivo descargado vacío")
+                if (!part.renameTo(dest)) {
+                    part.copyTo(dest, overwrite = true)
+                    part.delete()
                 }
+                return sha256(dest)
+            } catch (e: Exception) {
+                // Error VERÍDICO por origen (clase + mensaje); jamás "null"
+                errors += "${URL(base).host} → ${e.javaClass.simpleName}: ${e.message ?: "(sin mensaje)"}"
             }
         }
-        if (total > 0 && done != total) throw IllegalStateException("Descarga incompleta: $done/$total")
+        val left = if (part.exists() && part.length() > 0L)
+            " | El .part de ${part.length() / (1024 * 1024)} MB se conserva y se reanudará en el próximo intento." else ""
+        throw IllegalStateException("Descarga falló en todos los orígenes → ${errors.joinToString(" | ")}.$left")
+    }
+
+    private fun download(urlStr: String, part: File, source: String) {
+        for (attempt in 0..1) {
+            val already = if (part.exists()) part.length() else 0L
+            val conn = URL(urlStr).openConnection() as HttpURLConnection
+            conn.connectTimeout = 20000
+            conn.readTimeout = 90000
+            conn.instanceFollowRedirects = true
+            conn.setRequestProperty("User-Agent", "TerminalHouse-Bootstrap/1.2 (Android)")
+            if (already > 0L) conn.setRequestProperty("Range", "bytes=$already-")
+            try {
+                conn.connect()
+                val code = conn.responseCode
+
+                if (code == 416 && already > 0L) {
+                    // .part incompatible con el remoto: descartar y reintentar desde 0
+                    part.delete()
+                    continue
+                }
+                if (code !in 200..299) throw IllegalStateException("HTTP $code en $urlStr")
+
+                val resuming = already > 0L && code == 206
+                val remoteTotal = conn.getHeaderField("Content-Range")
+                    ?.substringAfter('/')?.toLongOrNull() ?: -1L
+                if (resuming && remoteTotal in 1 until already) {
+                    part.delete()
+                    continue
+                }
+                val total = if (resuming) remoteTotal else conn.contentLengthLong
+                val shownSource = if (resuming) "$source (reanudado desde ${already / (1024 * 1024)} MB)" else source
+                var done = if (resuming) already else 0L
+                var lastEmitBytes = -1L
+                var lastEmitMs = 0L
+
+                conn.inputStream.use { input ->
+                    FileOutputStream(part, resuming).use { out ->
+                        val buf = ByteArray(64 * 1024)
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            out.write(buf, 0, n)
+                            done += n
+                            // Progreso limitado (1 MB o 1 s): no inunda la UI
+                            if (lastEmitBytes < 0L || done - lastEmitBytes >= (1 shl 20) ||
+                                SystemClock.elapsedRealtime() - lastEmitMs >= 1000L
+                            ) {
+                                _status.value = Status.Downloading(done, if (total > 0) total else -1, shownSource)
+                                lastEmitBytes = done
+                                lastEmitMs = SystemClock.elapsedRealtime()
+                            }
+                        }
+                    }
+                }
+                if (total > 0 && done != total) {
+                    // Conexión corta: el .part SE CONSERVA para reanudar en el próximo intento
+                    throw IllegalStateException("Descarga incompleta: $done/$total bytes (se reanudará)")
+                }
+                _status.value = Status.Downloading(done, if (total > 0) total else done, shownSource)
+                return
+            } finally {
+                conn.disconnect()
+            }
+        }
+        throw IllegalStateException("HTTP 416 persistente en $urlStr")
     }
 
     private fun sha256(file: File): String {
