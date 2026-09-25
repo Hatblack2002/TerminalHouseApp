@@ -51,13 +51,13 @@ object SystemMonitor {
         // CPU (real, /proc/stat)
         val cpuUsage = readRealCpuUsage()
 
-        // Procesos (real, /proc)
-        val runningProcesses = actManager?.runningAppProcesses?.size ?: countSystemProcesses()
+        // Procesos (real, ActivityManager sin violar SELinux en /proc)
+        val runningProcesses = countSystemProcesses(actManager)
 
         // Uptime (real)
         val uptimeMinutes = SystemClock.elapsedRealtime() / (1000 * 60)
 
-        // Kernel (real, /proc/version)
+        // Kernel (real, System.getProperty os.version sin violar SELinux)
         val kernelVersion = readKernelVersion()
 
         // Rootfs: SOLO datos reales medidos del rootfs
@@ -111,52 +111,55 @@ object SystemMonitor {
         return if (primary.contains("arm64") || primary.contains("aarch64")) "aarch64" else primary
     }
 
+    @Volatile private var canReadProcStat: Boolean = true
+    @Volatile private var cachedKernelVersion: String? = null
+
     private fun readRealCpuUsage(): Int {
-        try {
-            val file = File("/proc/stat")
-            if (file.exists() && file.canRead()) {
-                BufferedReader(FileReader(file)).use { reader ->
-                    val line = reader.readLine()
-                    if (line != null && line.startsWith("cpu")) {
-                        val parts = line.split("\\s+".toRegex()).filter { it.isNotEmpty() }
-                        if (parts.size >= 5) {
-                            val user = parts[1].toLongOrNull() ?: 0L
-                            val nice = parts[2].toLongOrNull() ?: 0L
-                            val system = parts[3].toLongOrNull() ?: 0L
-                            val idle = parts[4].toLongOrNull() ?: 0L
-                            val total = user + nice + system + idle
-                            val active = user + nice + system
-                            if (total > 0) {
-                                return ((active.toDouble() / total) * 100).toInt().coerceIn(2, 95)
+        if (canReadProcStat) {
+            try {
+                val file = File("/proc/stat")
+                if (file.canRead()) {
+                    BufferedReader(FileReader(file)).use { reader ->
+                        val line = reader.readLine()
+                        if (line != null && line.startsWith("cpu")) {
+                            val parts = line.split("\\s+".toRegex()).filter { it.isNotEmpty() }
+                            if (parts.size >= 5) {
+                                val user = parts[1].toLongOrNull() ?: 0L
+                                val nice = parts[2].toLongOrNull() ?: 0L
+                                val system = parts[3].toLongOrNull() ?: 0L
+                                val idle = parts[4].toLongOrNull() ?: 0L
+                                val total = user + nice + system + idle
+                                val active = user + nice + system
+                                if (total > 0) {
+                                    return ((active.toDouble() / total) * 100).toInt().coerceIn(2, 95)
+                                }
                             }
                         }
                     }
+                } else {
+                    canReadProcStat = false
                 }
+            } catch (_: Throwable) {
+                canReadProcStat = false
             }
-        } catch (_: Exception) {}
+        }
         val processors = Runtime.getRuntime().availableProcessors()
         return (10 + (Process.myPid() % 15)).coerceIn(5, 45)
     }
 
-    private fun countSystemProcesses(): Int {
-        var count = 0
-        try {
-            val procDir = File("/proc")
-            val pids = procDir.listFiles { _, name -> name.all { it.isDigit() } }
-            if (pids != null) count = pids.size
-        } catch (_: Exception) {}
-        return if (count > 0) count else 1
+    private fun countSystemProcesses(actManager: ActivityManager?): Int {
+        val appProcesses = actManager?.runningAppProcesses?.size
+        if (appProcesses != null && appProcesses > 0) return appProcesses
+        return 1
     }
 
     private fun readKernelVersion(): String {
-        try {
-            val versionFile = File("/proc/version")
-            if (versionFile.exists()) {
-                val line = versionFile.readText()
-                val match = Regex("""Linux version (\S+)""").find(line)
-                if (match != null) return match.groupValues[1]
-            }
-        } catch (_: Exception) {}
+        cachedKernelVersion?.let { return it }
+        val prop = System.getProperty("os.version")
+        if (!prop.isNullOrBlank()) {
+            cachedKernelVersion = prop
+            return prop
+        }
         return "N/D"
     }
 }
