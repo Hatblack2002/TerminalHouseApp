@@ -132,8 +132,8 @@ fun DrawerContent(
             DrawerMenuItem(
                 icon = Icons.Default.SmartToy,
                 title = "Agente IA",
-                isSelected = currentScreen == AppScreen.IA,
-                onClick = { onSelectScreen(AppScreen.IA) }
+                isSelected = currentScreen == AppScreen.AGENTE_IA,
+                onClick = { onSelectScreen(AppScreen.AGENTE_IA) }
             )
 
             DrawerMenuItem(

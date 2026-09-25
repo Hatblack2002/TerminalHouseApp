@@ -103,6 +103,7 @@ import com.example.ui.theme.TextoSecundario
 import com.example.viewmodel.AppScreen
 import com.example.viewmodel.TerminalUiState
 import com.example.viewmodel.TerminalViewModel
+import com.terminalhouse.ui.settings.AiAgentSettingsScreen
 import kotlinx.coroutines.launch
 
 import android.os.Bundle
@@ -314,6 +315,13 @@ fun TerminalHouseApp(
                             AppScreen.IA -> {
                                 // v0.3.0: el panel IA es un bottom sheet (SECCIÓN 8); la
                                 // pestaña IA lo abre y el terminal permanece intacto debajo.
+                            }
+                            AppScreen.AGENTE_IA -> {
+                                // v0.5.0: pantalla de configuración del Agente IA
+                                // (proveedor, modelo y API key cifrada en el dispositivo).
+                                AiAgentSettingsScreen(
+                                    onBack = { viewModel.setScreen(AppScreen.TERMINAL) }
+                                )
                             }
                             AppScreen.PROYECTOS -> {
                                 ProjectsScreen(

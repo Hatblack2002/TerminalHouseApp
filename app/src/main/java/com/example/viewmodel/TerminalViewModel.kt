@@ -40,6 +40,7 @@ enum class CopyAction { ALL, LAST_50, LAST_100, LAST_CMD, LAST_OUTPUT, LAST_LINE
 enum class AppScreen {
     TERMINAL,
     IA,
+    AGENTE_IA,
     PROYECTOS,
     MAS,
     ARCHIVOS,
