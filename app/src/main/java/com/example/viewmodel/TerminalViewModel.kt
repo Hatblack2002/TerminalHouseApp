@@ -18,6 +18,13 @@ import com.example.service.LinuxBootstrap
 import com.example.service.PtyBridge
 import com.example.service.SystemMonitor
 import com.example.service.TerminalEngine
+import com.terminalhouse.ai.AiAgentSystem
+import com.terminalhouse.ai.AiConfig
+import com.terminalhouse.ai.AiException
+import com.terminalhouse.ai.AiMessage as AiApiMessage
+import com.terminalhouse.ai.AiProviderFactory
+import com.terminalhouse.ai.AiRole
+import com.terminalhouse.ai.SecureConfigStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -30,6 +37,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -706,14 +714,30 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
         _uiState.update { it.copy(aiInputText = text) }
     }
 
+    // ------------------------------------------------------------------
+    // v0.5.0 — el panel IA habla DE VERDAD con el proveedor configurado
+    // (Agente IA → proveedor + endpoint + API key cifrada) vía
+    // AiProviderFactory + AiAgentSystem (system prompt + contexto).
+    // ------------------------------------------------------------------
+
+    /** Almacén cifrado de la configuración del agente (AES-256, Keystore). */
+    private val aiStore by lazy { SecureConfigStore(app()) }
+
+    /** Historial real USER/ASSISTANT para multi-turno (fuera de la UI). */
+    private val aiConversationHistory = ArrayDeque<AiApiMessage>()
+
+    /** Una petición IA a la vez (30s de timeout máximo acota la espera). */
+    private val aiInFlight = AtomicBoolean(false)
+
     fun sendAiMessage(promptText: String? = null) {
         val textToSend = promptText ?: _uiState.value.aiInputText.trim()
         if (textToSend.isEmpty()) return
+        if (!aiInFlight.compareAndSet(false, true)) return
 
         // v0.3.0: si hay contexto seleccionado del terminal, SOLO ese contexto viaja
         // con la pregunta (nunca el buffer completo del terminal).
-        val context = _uiState.value.aiContext
-        val fullText = if (context != null) "Contexto del terminal:\n$context\n\nPregunta: $textToSend" else textToSend
+        val selection = _uiState.value.aiContext
+        val fullText = if (selection != null) "Contexto del terminal:\n$selection\n\nPregunta: $textToSend" else textToSend
 
         val userMessage = AiMessage(
             id = UUID.randomUUID().toString(),
@@ -723,11 +747,108 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
         _uiState.update {
             it.copy(aiMessages = it.aiMessages + userMessage, aiInputText = "", aiContext = null)
         }
-        viewModelScope.launch {
-            delay(300)
-            val response = AiAgentService.processQuery(fullText)
-            _uiState.update { it.copy(aiMessages = it.aiMessages + response) }
+
+        // v0.5.0 — sin configuración guardada, el punto de conexión ES la pantalla
+        // Agente IA: se explica y se navega directamente a ella.
+        val config: AiConfig? = aiStore.load()
+        if (config == null || !config.isComplete()) {
+            aiInFlight.set(false)
+            _uiState.update {
+                it.copy(
+                    aiMessages = it.aiMessages + AiMessage(
+                        id = UUID.randomUUID().toString(),
+                        isUser = false,
+                        text = "Conecta tu proveedor de IA para chatear de verdad:\n\n1. Menú lateral (☰) → Agente IA\n2. Elige proveedor (OpenAI, Claude, Gemini, Mistral, DeepSeek, Kimi o Custom)\n3. Pega tu API key y pulsa Guardar\n\nTu key se guarda CIFRADA en este teléfono (AES-256) y solo viaja al endpoint del proveedor que tú elijas. TerminalHouse no tiene servidores ni ve tu clave."
+                    )
+                )
+            }
+            hideAiSheet()
+            setScreen(AppScreen.AGENTE_IA)
+            return
         }
+
+        viewModelScope.launch {
+            try {
+                val provider = AiProviderFactory.create(config)
+                val apiMessages = AiAgentSystem.buildMessages(
+                    userText = textToSend,
+                    terminalContext = buildAiTerminalContext(selection),
+                    history = aiConversationHistory.toList().takeLast(10)
+                )
+                val response = provider.complete(apiMessages)
+
+                aiConversationHistory.addLast(AiApiMessage(AiRole.USER, textToSend))
+                aiConversationHistory.addLast(AiApiMessage(AiRole.ASSISTANT, response.text))
+                while (aiConversationHistory.size > 20) aiConversationHistory.removeFirst()
+
+                // La UI v0.3.0 muestra el botón "Ejecutar" vía suggestedCommand:
+                // se extrae el primer bloque ```bash``` de la respuesta real.
+                val command = extractFirstBashCommand(response.text)
+                val visibleText = response.text.replace("```bash", "").replace("```", "").trim()
+                    .ifEmpty { response.text }
+
+                _uiState.update {
+                    it.copy(
+                        aiMessages = it.aiMessages + AiMessage(
+                            id = UUID.randomUUID().toString(),
+                            isUser = false,
+                            text = visibleText,
+                            suggestedCommand = command
+                        )
+                    )
+                }
+            } catch (e: AiException) {
+                _uiState.update {
+                    it.copy(
+                        aiMessages = it.aiMessages + AiMessage(
+                            id = UUID.randomUUID().toString(),
+                            isUser = false,
+                            text = "⚠️ ${e.message}"
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        aiMessages = it.aiMessages + AiMessage(
+                            id = UUID.randomUUID().toString(),
+                            isUser = false,
+                            text = "⚠️ No se pudo contactar con el proveedor de IA. Revisa tu conexión a internet o tu configuración en ☰ → Agente IA."
+                        )
+                    )
+                }
+            } finally {
+                aiInFlight.set(false)
+            }
+        }
+    }
+
+    /**
+     * v0.5.0 SECCIÓN 7 — bloque de contexto del terminal para el agente:
+     * último comando + última salida (truncada a 2000 chars por el medio)
+     * y, si el usuario usó "Enviar a IA", la selección explícita.
+     */
+    private fun buildAiTerminalContext(selection: String?): String {
+        val lastCommand = buildCopyText(CopyAction.LAST_CMD).trim().takeIf { it.isNotEmpty() }
+        val lastOutput = buildCopyText(CopyAction.LAST_OUTPUT).trim().takeIf { it.isNotEmpty() }
+        val base = AiAgentSystem.buildTerminalContext(
+            currentDirectory = null,
+            lastCommand = lastCommand,
+            lastOutput = lastOutput
+        )
+        if (selection.isNullOrBlank()) return base
+        val header = base.ifEmpty { "[Contexto del terminal]" }
+        return "$header\nSelección enviada por el usuario:\n$selection"
+    }
+
+    /** Primer bloque ```bash``` de la respuesta → botón "Ejecutar" (UI v0.3.0). */
+    private fun extractFirstBashCommand(text: String): String? {
+        val start = text.indexOf("```bash")
+        if (start < 0) return null
+        val bodyStart = start + "```bash".length
+        val end = text.indexOf("```", bodyStart)
+        if (end < 0) return null
+        return text.substring(bodyStart, end).trim().ifEmpty { null }
     }
 
     fun installPackage(pkg: PackageItem) {
