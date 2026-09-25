@@ -24,14 +24,18 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Widgets
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.Icon
@@ -55,9 +59,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AiMessage
 import com.example.ui.theme.AccentOrange
+import com.example.ui.theme.BordesSutiles
+import com.example.ui.theme.FondoMenuContextual
+import com.example.ui.theme.FondoSheetIa
+import com.example.ui.theme.FondoTarjetas
 import com.example.ui.theme.StatusOnlineGreen
 import com.example.ui.theme.SurfaceDark
 import com.example.ui.theme.SurfaceVariantDark
+import com.example.ui.theme.TextoAtenuado
+import com.example.ui.theme.TextoPrimario
+import com.example.ui.theme.TextoSecundario
 import com.example.ui.theme.TextMutedDark
 import com.example.ui.theme.TextPrimaryDark
 import com.example.ui.theme.TextSecondaryDark
@@ -204,7 +215,7 @@ fun AiAgentHomeCard(
 }
 
 /**
- * Full AI Panel Screen (as depicted in "Panel IA (en modo portrait)")
+ * Full AI Panel Screen (as depicted in "Panel IA" in Mockup Screens 2, 3, 6)
  */
 @Composable
 fun AiAgentFullPanel(
@@ -215,151 +226,191 @@ fun AiAgentFullPanel(
     onExecuteCommandInTerminal: (String) -> Unit,
     modifier: Modifier = Modifier,
     contextText: String? = null,
-    onClearContext: () -> Unit = {}
+    onClearContext: () -> Unit = {},
+    onClose: (() -> Unit)? = null
 ) {
     Column(
         modifier = modifier
             .fillMaxSize()
+            .background(FondoSheetIa)
+            .padding(horizontal = 14.dp, vertical = 6.dp)
             .testTag("ai_agent_full_panel")
     ) {
-        // Header: Agente IA, Green dot "En línea"
+        // Header: 🤖 Agente IA · En línea · OpenAI · gpt-4o-mini · ⚙️
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF22222C)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.SmartToy,
-                    contentDescription = null,
-                    tint = AccentOrange,
-                    modifier = Modifier.size(22.dp)
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Robot Icon squircle
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(FondoTarjetas)
+                        .border(1.dp, BordesSutiles, RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SmartToy,
+                        contentDescription = "Agente IA",
+                        tint = AccentOrange,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Agente IA",
+                            color = TextoPrimario,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(7.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(StatusOnlineGreen)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "En línea",
+                            color = StatusOnlineGreen,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Text(
+                        text = "OpenAI · gpt-4o-mini",
+                        color = TextoSecundario,
+                        fontSize = 11.sp
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Agente IA",
-                        color = TextPrimaryDark,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = { /* Settings action */ },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = "Configuración del agente",
+                        tint = TextoSecundario,
+                        modifier = Modifier.size(18.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(StatusOnlineGreen)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "En línea",
-                        color = StatusOnlineGreen,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                }
+                if (onClose != null) {
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cerrar panel IA",
+                            tint = TextoSecundario,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
-        // Chat & Action Options Area
+        // Chat conversation area
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth()
-                .padding(horizontal = 2.dp),
+                .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // First Message Speech Bubble
+            // First Message Greeting
             item {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFF181820),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF262632)),
-                    modifier = Modifier.fillMaxWidth()
+                    shape = RoundedCornerShape(topStart = 4.dp, topEnd = 14.dp, bottomStart = 14.dp, bottomEnd = 14.dp),
+                    color = FondoMenuContextual,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BordesSutiles),
+                    modifier = Modifier.fillMaxWidth(0.92f)
                 ) {
-                    Text(
-                        text = "Hola, soy tu agente IA. Puedo ayudarte a crear apps, instalar herramientas, ejecutar comandos, analizar archivos y mucho más.",
-                        color = Color(0xFFD4D4E0),
-                        fontSize = 13.5.sp,
-                        lineHeight = 19.sp,
-                        modifier = Modifier.padding(14.dp)
-                    )
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "¡Hola! Estoy conectado a tu entorno Ubuntu. ¿En qué puedo ayudarte hoy?",
+                            color = TextoPrimario,
+                            fontSize = 13.5.sp,
+                            lineHeight = 19.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "9:41",
+                            color = TextoSecundario,
+                            fontSize = 10.sp,
+                            modifier = Modifier.align(Alignment.End)
+                        )
+                    }
                 }
             }
 
-            // Section: "¿Qué quieres hacer hoy?"
-            item {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Folder,
-                        contentDescription = null,
-                        tint = AccentOrange,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
+            // Quick suggestions when messages are few
+            if (messages.size <= 1) {
+                item {
                     Text(
                         text = "¿Qué quieres hacer hoy?",
-                        color = AccentOrange,
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.SemiBold
+                        color = TextoSecundario,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
                     )
+                }
+
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = FondoTarjetas,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BordesSutiles),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onSendMessage("Muéstrame la versión de Ubuntu.") }
+                        ) {
+                            Text(
+                                text = "Versión de Ubuntu",
+                                color = TextoPrimario,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = FondoTarjetas,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BordesSutiles),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onSendMessage("¿Cómo instalo htop?") }
+                        ) {
+                            Text(
+                                text = "Instalar htop",
+                                color = TextoPrimario,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                            )
+                        }
+                    }
                 }
             }
 
-            // 4 Action Buttons
-            item {
-                AiActionOptionCard(
-                    icon = Icons.Default.Android,
-                    iconBgColor = Color(0xFF10B981),
-                    title = "Crear una app nativa de Android",
-                    onClick = { onSendMessage("Crear una app nativa de Android") }
-                )
-            }
-
-            item {
-                AiActionOptionCard(
-                    icon = Icons.Default.Widgets,
-                    iconBgColor = AccentOrange,
-                    title = "Instalar una herramienta",
-                    onClick = { onSendMessage("Instalar una herramienta") }
-                )
-            }
-
-            item {
-                AiActionOptionCard(
-                    icon = Icons.Default.Terminal,
-                    iconBgColor = Color(0xFF3B82F6),
-                    title = "Ejecutar un comando",
-                    onClick = { onSendMessage("Ejecutar un comando") }
-                )
-            }
-
-            item {
-                AiActionOptionCard(
-                    icon = Icons.Default.Description,
-                    iconBgColor = Color(0xFFA855F7),
-                    title = "Analizar un archivo",
-                    onClick = { onSendMessage("Analizar un archivo") }
-                )
-            }
-
-            // Additional user & agent messages
+            // Conversation history (User & Agent messages)
             items(messages.drop(1)) { msg ->
                 AiMessageBubble(
                     message = msg,
@@ -368,9 +419,9 @@ fun AiAgentFullPanel(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
-        // v0.3.0 — chip de contexto seleccionado en el terminal (SECCIÓN 7/8)
+        // Context chip from terminal selection (if any)
         if (contextText != null) {
             Surface(
                 shape = RoundedCornerShape(8.dp),
@@ -403,35 +454,24 @@ fun AiAgentFullPanel(
             Spacer(modifier = Modifier.height(6.dp))
         }
 
-        // Bottom input row: >_ icon + "Escribe tu solicitud..." + orange > button
+        // Bottom input row: "¿Qué quieres hacer?" + circular orange send button ↑
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF191922))
-                .border(1.dp, Color(0xFF2B2B38), RoundedCornerShape(12.dp))
-                .padding(horizontal = 12.dp),
+                .clip(RoundedCornerShape(24.dp))
+                .background(FondoMenuContextual)
+                .border(1.dp, BordesSutiles, RoundedCornerShape(24.dp))
+                .padding(start = 16.dp, end = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // >_ icon
-            Text(
-                text = ">_",
-                color = AccentOrange,
-                fontSize = 16.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.width(10.dp))
-
             BasicTextField(
                 value = inputValue,
                 onValueChange = onInputChange,
                 modifier = Modifier
                     .weight(1f)
                     .testTag("ai_full_input_field"),
-                textStyle = MaterialTheme.typography.bodyMedium.copy(color = TextPrimaryDark),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = TextoPrimario),
                 cursorBrush = SolidColor(AccentOrange),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -439,8 +479,8 @@ fun AiAgentFullPanel(
                 decorationBox = { innerTextField ->
                     if (inputValue.isEmpty()) {
                         Text(
-                            text = "Escribe tu solicitud...",
-                            color = TextMutedDark,
+                            text = "¿Qué quieres hacer?",
+                            color = TextoAtenuado,
                             fontSize = 13.5.sp
                         )
                     }
@@ -448,20 +488,20 @@ fun AiAgentFullPanel(
                 }
             )
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
-            // Orange rounded button >
+            // Orange circular button with upward arrow ↑
             Box(
                 modifier = Modifier
-                    .size(34.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .size(36.dp)
+                    .clip(CircleShape)
                     .background(AccentOrange)
                     .clickable { onSendMessage(null) }
                     .testTag("ai_full_send_button"),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    imageVector = Icons.Filled.ArrowUpward,
                     contentDescription = "Enviar solicitud",
                     tint = Color.White,
                     modifier = Modifier.size(18.dp)
@@ -472,11 +512,8 @@ fun AiAgentFullPanel(
 }
 
 /**
- * v0.3.0 SECCIÓN 8 — contenido del bottom sheet del Agente IA.
- * PRESERVACIÓN: el contenido es EXACTAMENTE el AiAgentFullPanel existente (no se
- * rediseña); solo se añade el contenedor de sheet: drag handle, botón ✕ y el chip
- * de contexto cuando llega una selección del terminal (SECCIÓN 7: el agente recibe
- * SOLO lo enviado).
+ * v0.3.0 SECCIÓN 8 — contenido del bottom sheet del Agente IA (Mockup Screens 2 & 3).
+ * Incluye drag handle centrado de 40x4 dp.
  */
 @Composable
 fun AiAgentSheetContent(
@@ -490,78 +527,36 @@ fun AiAgentSheetContent(
     onClose: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier.fillMaxSize()) {
-        // Drag handle del sheet
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(FondoSheetIa)
+    ) {
+        // Drag handle del sheet (Mockup Screens 2 y 3: barra gris centrada 40x4 dp)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 6.dp),
+                .padding(top = 8.dp, bottom = 4.dp),
             contentAlignment = Alignment.Center
         ) {
             Box(
                 modifier = Modifier
-                    .size(width = 44.dp, height = 4.dp)
+                    .size(width = 40.dp, height = 4.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(Color(0xFF3A3A48))
+                    .background(Color(0xFF5A5A5A))
             )
         }
 
-        // Fila con ✕ de cierre (spec SECCIÓN 8: "Tap en ✕ → cierra")
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Cerrar panel IA",
-                    tint = Color(0xFFA0A0B0),
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
-
-        // Chip de contexto recibido desde el terminal (SECCIÓN 7 → SECCIÓN 8)
-        if (contextText != null) {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = AccentOrange.copy(alpha = 0.15f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, AccentOrange.copy(alpha = 0.5f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 2.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Contexto del terminal: ${contextText.length} caracteres (el agente solo ve esta selección)",
-                        color = AccentOrange,
-                        fontSize = 11.5.sp,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    IconButton(onClick = onClearContext, modifier = Modifier.size(24.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Quitar contexto",
-                            tint = AccentOrange,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // Contenido preservado del panel IA existente
+        // Contenido completo del panel IA
         AiAgentFullPanel(
             messages = messages,
             inputValue = inputValue,
             onInputChange = onInputChange,
             onSendMessage = onSendMessage,
-            onExecuteCommandInTerminal = onExecuteCommandInTerminal
+            onExecuteCommandInTerminal = onExecuteCommandInTerminal,
+            contextText = contextText,
+            onClearContext = onClearContext,
+            onClose = onClose
         )
     }
 }
@@ -632,73 +627,109 @@ private fun AiMessageBubble(
             horizontalArrangement = Arrangement.End
         ) {
             Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = AccentOrange.copy(alpha = 0.2f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, AccentOrange.copy(alpha = 0.5f)),
-                modifier = Modifier.padding(start = 32.dp)
+                shape = RoundedCornerShape(topStart = 14.dp, topEnd = 4.dp, bottomStart = 14.dp, bottomEnd = 14.dp),
+                color = AccentOrange,
+                modifier = Modifier
+                    .padding(start = 40.dp)
+                    .fillMaxWidth(0.85f)
             ) {
-                Text(
-                    text = message.text,
-                    color = Color.White,
-                    fontSize = 13.5.sp,
-                    modifier = Modifier.padding(12.dp)
-                )
+                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    Text(
+                        text = message.text,
+                        color = Color.White,
+                        fontSize = 13.5.sp,
+                        lineHeight = 18.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.align(Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "9:42",
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 10.sp
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "✓✓",
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         }
     } else {
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = Color(0xFF181820),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF262632)),
-            modifier = Modifier.fillMaxWidth()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Start
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    text = message.text,
-                    color = Color(0xFFD4D4E0),
-                    fontSize = 13.5.sp,
-                    lineHeight = 19.sp
-                )
+            Surface(
+                shape = RoundedCornerShape(topStart = 4.dp, topEnd = 14.dp, bottomStart = 14.dp, bottomEnd = 14.dp),
+                color = FondoMenuContextual,
+                border = androidx.compose.foundation.BorderStroke(1.dp, BordesSutiles),
+                modifier = Modifier
+                    .padding(end = 40.dp)
+                    .fillMaxWidth(0.92f)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = message.text,
+                        color = TextoPrimario,
+                        fontSize = 13.5.sp,
+                        lineHeight = 19.sp
+                    )
 
-                if (message.suggestedCommand != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF111116),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF22222E)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                    if (message.suggestedCommand != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF111116),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BordesSutiles),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                text = message.suggestedCommand,
-                                color = Color(0xFF22C55E),
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 12.sp,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Box(
+                            Row(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(AccentOrange)
-                                    .clickable { onExecuteCommand(message.suggestedCommand) }
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "Ejecutar",
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    text = message.suggestedCommand,
+                                    color = Color(0xFF22C55E),
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.weight(1f)
                                 )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(AccentOrange)
+                                        .clickable { onExecuteCommand(message.suggestedCommand) }
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                ) {
+                                    Text(
+                                        text = "Ejecutar",
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "9:41",
+                        color = TextoSecundario,
+                        fontSize = 10.sp,
+                        modifier = Modifier.align(Alignment.End)
+                    )
                 }
             }
         }

@@ -29,11 +29,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CleaningServices
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
@@ -82,11 +90,16 @@ import com.example.ui.components.ToolsScreen
 import com.example.ui.theme.AccentOrange
 import com.example.ui.theme.BackgroundDark
 import com.example.ui.theme.BackgroundLight
+import com.example.ui.theme.BordesSutiles
+import com.example.ui.theme.ColorExito
+import com.example.ui.theme.FondoHeader
+import com.example.ui.theme.FondoMenuContextual
+import com.example.ui.theme.FondoToolbar
 import com.example.ui.theme.StatusOnlineGreen
 import com.example.ui.theme.SurfaceDark
 import com.example.ui.theme.TerminalHouseTheme
-import com.example.ui.theme.TextPrimaryDark
-import com.example.ui.theme.TextSecondaryDark
+import com.example.ui.theme.TextoPrimario
+import com.example.ui.theme.TextoSecundario
 import com.example.viewmodel.AppScreen
 import com.example.viewmodel.TerminalUiState
 import com.example.viewmodel.TerminalViewModel
@@ -426,149 +439,166 @@ private fun PortraitTopBar(
     onToggleTheme: () -> Unit,
     onOpenAbout: () -> Unit
 ) {
-    Row(
+    Surface(
+        color = FondoHeader,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .height(60.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BordesSutiles)
     ) {
-        // Left: Hamburger menu + Brand Logo + Title + Subtitle
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(
-                onClick = onOpenDrawer,
-                modifier = Modifier
-                    .size(40.dp)
-                    .testTag("drawer_menu_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Menu,
-                    contentDescription = "Abrir menú",
-                    tint = TextPrimaryDark,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(4.dp))
-
-            // Brand Logo
-            Icon(
-                painter = painterResource(id = R.drawable.ic_terminalhouse_logo),
-                contentDescription = "Logo TerminalHouse",
-                tint = AccentOrange,
-                modifier = Modifier.size(30.dp)
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Column {
-                Row {
-                    Text(
-                        text = "Terminal",
-                        color = TextPrimaryDark,
-                        fontSize = 15.5.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "House",
-                        color = AccentOrange,
-                        fontSize = 15.5.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Text(
-                    text = subtitle, // v0.3.0 SECCIÓN 3 — dinámico, PROHIBIDO estático
-                    color = TextSecondaryDark,
-                    fontSize = 10.5.sp,
-                    maxLines = 1
-                )
-            }
-        }
-
-        // Right: Status indicator + Overflow Menu
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // Status Pill
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Left: Hamburger menu + Brand Logo + Title + Subtitle
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF1E1E26))
-                    .clickable { onOpenSystemDialog() }
-                    .padding(horizontal = 9.dp, vertical = 5.dp)
-                    .testTag("status_indicator_pill")
+                modifier = Modifier.weight(1f, fill = false)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(7.dp)
-                        .clip(CircleShape)
-                        .background(StatusOnlineGreen)
-                )
-                Spacer(modifier = Modifier.width(5.dp))
-                Text(
-                    text = "En línea",
-                    color = StatusOnlineGreen,
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            Spacer(modifier = Modifier.width(4.dp))
-
-            Box {
                 IconButton(
-                    onClick = { onToggleOverflowMenu(true) },
+                    onClick = onOpenDrawer,
                     modifier = Modifier
-                        .size(36.dp)
-                        .testTag("top_bar_overflow_menu")
+                        .size(40.dp)
+                        .testTag("drawer_menu_button")
                 ) {
                     Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "Más opciones",
-                        tint = Color(0xFFA0A0B0),
-                        modifier = Modifier.size(20.dp)
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = "Abrir menú",
+                        tint = TextoPrimario,
+                        modifier = Modifier.size(22.dp)
                     )
                 }
 
-                DropdownMenu(
-                    expanded = showOverflowMenu,
-                    onDismissRequest = { onToggleOverflowMenu(false) },
-                    modifier = Modifier.background(Color(0xFF1E1E28))
+                Spacer(modifier = Modifier.width(4.dp))
+
+                // Brand Logo
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_terminalhouse_logo),
+                    contentDescription = "Logo TerminalHouse",
+                    tint = AccentOrange,
+                    modifier = Modifier.size(28.dp)
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Column {
+                    Row {
+                        Text(
+                            text = "Terminal",
+                            color = TextoPrimario,
+                            fontSize = 15.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "House",
+                            color = AccentOrange,
+                            fontSize = 15.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        text = subtitle,
+                        color = TextoSecundario,
+                        fontSize = 10.sp,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            // Right: Notification Bell + Settings Gear Menu
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Bell (Notificaciones / Diagnóstico)
+                IconButton(
+                    onClick = onOpenSystemDialog,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .testTag("top_bar_notifications_button")
                 ) {
-                    DropdownMenuItem(
-                        text = { Text("Diagnóstico del sistema", color = TextPrimaryDark) },
-                        onClick = {
-                            onToggleOverflowMenu(false)
-                            onOpenSystemDialog()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Nueva sesión de terminal", color = TextPrimaryDark) },
-                        onClick = {
-                            onToggleOverflowMenu(false)
-                            onNewSession()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Limpiar terminal", color = TextPrimaryDark) },
-                        onClick = {
-                            onToggleOverflowMenu(false)
-                            onClearScreen()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Cambiar tema (Oscuro/Claro)", color = TextPrimaryDark) },
-                        onClick = {
-                            onToggleOverflowMenu(false)
-                            onToggleTheme()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Acerca de TerminalHouse", color = AccentOrange) },
-                        onClick = {
-                            onToggleOverflowMenu(false)
-                            onOpenAbout()
-                        }
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = "Notificaciones del sistema",
+                            tint = TextoSecundario,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(ColorExito)
+                                .align(Alignment.TopEnd)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(2.dp))
+
+                Box {
+                    IconButton(
+                        onClick = { onToggleOverflowMenu(true) },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("top_bar_overflow_menu")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Ajustes y opciones",
+                            tint = TextoSecundario,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showOverflowMenu,
+                        onDismissRequest = { onToggleOverflowMenu(false) },
+                        modifier = Modifier
+                            .background(FondoMenuContextual)
+                            .border(1.dp, BordesSutiles, RoundedCornerShape(12.dp))
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Diagnóstico del sistema", color = TextoPrimario) },
+                            leadingIcon = { Icon(Icons.Default.Info, contentDescription = null, tint = AccentOrange) },
+                            onClick = {
+                                onToggleOverflowMenu(false)
+                                onOpenSystemDialog()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Nueva sesión de terminal", color = TextoPrimario) },
+                            leadingIcon = { Icon(Icons.Default.Add, contentDescription = null, tint = TextoSecundario) },
+                            onClick = {
+                                onToggleOverflowMenu(false)
+                                onNewSession()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Limpiar terminal", color = TextoPrimario) },
+                            leadingIcon = { Icon(Icons.Default.CleaningServices, contentDescription = null, tint = TextoSecundario) },
+                            onClick = {
+                                onToggleOverflowMenu(false)
+                                onClearScreen()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Cambiar tema (Oscuro/Claro)", color = TextoPrimario) },
+                            leadingIcon = { Icon(Icons.Default.DarkMode, contentDescription = null, tint = TextoSecundario) },
+                            onClick = {
+                                onToggleOverflowMenu(false)
+                                onToggleTheme()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Acerca de TerminalHouse", color = AccentOrange) },
+                            leadingIcon = { Icon(Icons.Default.HelpOutline, contentDescription = null, tint = AccentOrange) },
+                            onClick = {
+                                onToggleOverflowMenu(false)
+                                onOpenAbout()
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -581,14 +611,16 @@ private fun PortraitBottomNavBar(
     onSelectTab: (AppScreen) -> Unit
 ) {
     Surface(
-        color = Color(0xFF141419),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF22222C)),
-        modifier = Modifier.fillMaxWidth()
+        color = FondoToolbar,
+        border = androidx.compose.foundation.BorderStroke(1.dp, BordesSutiles),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp)
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 6.dp),
+                .fillMaxSize()
+                .padding(horizontal = 8.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -601,7 +633,7 @@ private fun PortraitBottomNavBar(
             )
 
             BottomNavItem(
-                icon = Icons.Default.AutoAwesome,
+                icon = Icons.Default.SmartToy,
                 label = "IA",
                 isSelected = currentScreen == AppScreen.IA,
                 onClick = { onSelectTab(AppScreen.IA) },

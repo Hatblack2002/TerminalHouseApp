@@ -2,6 +2,14 @@ package com.example.ui.components
 
 import androidx.compose.foundation.background
 import com.example.service.SystemMonitor
+import com.example.ui.theme.AccentOrange
+import com.example.ui.theme.FondoGlobal
+import com.example.ui.theme.FondoTerminal
+import com.example.ui.theme.FondoTarjetas
+import com.example.ui.theme.BordesSutiles
+import com.example.ui.theme.TextoPrimario
+import com.example.ui.theme.TextoSecundario
+import com.example.ui.theme.ColorExito
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -50,7 +58,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.model.TerminalSession
-import com.example.ui.theme.AccentOrange
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Settings
+import com.example.ui.theme.BordesSutiles
+import com.example.ui.theme.Divisores
+import com.example.ui.theme.FondoGlobal
+import com.example.ui.theme.FondoHeader
+import com.example.ui.theme.FondoSheetIa
+import com.example.ui.theme.TextoPrimario
+import com.example.ui.theme.TextoSecundario
 import com.example.ui.theme.StatusOnlineGreen
 import com.example.ui.theme.TextPrimaryDark
 import com.example.ui.theme.TextSecondaryDark
