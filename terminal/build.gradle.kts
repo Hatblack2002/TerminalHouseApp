@@ -13,6 +13,14 @@ android {
     abortOnError = false
   }
     ndkVersion = "26.1.10909125"
+    // Adaptación de ENTORNO (no de app): el sandbox actual prohíbe symlinks y
+    // borró el NDK local por falta de disco. Si el NDK 26.1.10909125 íntegro
+    // existe en /tmp/my-project se reutiliza; en cualquier otro entorno
+    // (tu máquina, CI) esta ruta no existe y se usa el NDK normal del SDK.
+    val sandboxNdk = File("/tmp/my-project/android-sdk/ndk/26.1.10909125")
+    if (sandboxNdk.exists()) {
+        ndkPath = sandboxNdk.absolutePath
+    }
 
     defaultConfig {
         minSdk = 24
