@@ -53,6 +53,29 @@ public final class TerminalSession extends TerminalOutput {
     /** Callback which gets notified when a session finishes or changes title. */
     TerminalSessionClient mClient;
 
+    /**
+     * TerminalHouse (diagnóstico anti-duplicación): observador pasivo de los bytes
+     * crudos que el lector del PTY entrega al emulador. Se invoca en el hilo
+     * principal, en el mismo orden exacto en que el emulador los consume, SIN
+     * modificar el flujo (es de solo lectura). null por defecto = sin cambios de
+     * comportamiento respecto a termux-app original.
+     */
+    public interface RawOutputTap {
+        void onRawOutput(byte[] buffer, int length);
+    }
+
+    private volatile RawOutputTap mRawOutputTap;
+
+    /** Observador de bytes crudos del PTY (TerminalHouse). */
+    public void setRawOutputTap(RawOutputTap tap) {
+        mRawOutputTap = tap;
+    }
+
+    /** Descriptor del lado master del PTY (diagnóstico TerminalHouse); -1 tras cerrarse. */
+    public int getTerminalFileDescriptor() {
+        return mTerminalFileDescriptor;
+    }
+
     /** The pid of the shell process. 0 if not started and -1 if finished running. */
     int mShellPid;
 
@@ -252,6 +275,8 @@ public final class TerminalSession extends TerminalOutput {
         // Stop the reader and writer threads, and close the I/O streams
         mTerminalToProcessIOQueue.close();
         mProcessToTerminalIOQueue.close();
+        // TerminalHouse (diagnóstico): evidencia explícita de quién cierra master_fd.
+        Logger.logInfo(mClient, LOG_TAG, "cleanupResources: cerrando master fd=" + mTerminalFileDescriptor + " (exitStatus=" + exitStatus + ")");
         JNI.close(mTerminalFileDescriptor);
     }
 
@@ -342,6 +367,9 @@ public final class TerminalSession extends TerminalOutput {
         public void handleMessage(Message msg) {
             int bytesRead = mProcessToTerminalIOQueue.read(mReceiveBuffer, false);
             if (bytesRead > 0) {
+                // TerminalHouse: tap ANTES de entregar al emulador (byte crudo, orden exacto).
+                final RawOutputTap tap = mRawOutputTap;
+                if (tap != null) tap.onRawOutput(mReceiveBuffer, bytesRead);
                 mEmulator.append(mReceiveBuffer, bytesRead);
                 notifyScreenUpdate();
             }

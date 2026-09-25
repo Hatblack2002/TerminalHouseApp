@@ -40,7 +40,12 @@ object TerminalEngine {
 
         val lines = PtyBridge.runCommand(sessionId, trimmed, context)
             ?: listOf(
-                TerminalLine("[motor] Sesión no disponible. Estado real del bootstrap: ${describe(LinuxBootstrap.status.value)}", LineType.ERROR)
+                // Task 6: el fallo JAMÁS queda ciego — incluye el motivo real registrado
+                // por PtyBridge.ensureSession (excepción, PRoot ausente o rootfs no listo).
+                TerminalLine(
+                    "[motor] Sesión no disponible. Causa: ${PtyBridge.lastFailureReason(sessionId)}. Estado real del bootstrap: ${describe(LinuxBootstrap.status.value)}",
+                    LineType.ERROR
+                )
             )
 
         CommandResult(lines, currentDir, shouldClear)

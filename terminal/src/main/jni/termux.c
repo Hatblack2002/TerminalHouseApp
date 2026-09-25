@@ -9,6 +9,10 @@
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
+#include <grp.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <android/log.h>
 
 #define TERMUX_UNUSED(x) x __attribute__((__unused__))
 #ifdef __APPLE__
@@ -83,6 +87,23 @@ static int create_subprocess(JNIEnv* env,
         dup2(pts, 0);
         dup2(pts, 1);
         dup2(pts, 2);
+
+        // TerminalHouse: los GIDs suplementarios del proceso Android (3003=inet,
+        // 9997=everyone, 20388/50388 per-app/per-user) se heredan por fork() y PRoot
+        // -0 NO los filtra, por lo que dentro del rootfs `groups`/`id` emiten
+        // "cannot find name for group ID". Si el lanzador exporta
+        // TH_CLEAR_SUPPL_GROUPS=1, se descartan ANTES de exec (setgroups(0, NULL)).
+        // El resultado real se registra en logcat; si el kernel deniega CAP_SETGID
+        // se registra EPERM sin abortar el arranque.
+        if (getenv("TH_CLEAR_SUPPL_GROUPS") != NULL) {
+            if (setgroups(0, NULL) == 0) {
+                __android_log_print(ANDROID_LOG_INFO, "termux.c",
+                    "setgroups(0, NULL) OK: GIDs suplementarios de Android descartados antes de exec");
+            } else {
+                __android_log_print(ANDROID_LOG_WARN, "termux.c",
+                    "setgroups(0, NULL) falló (errno=%d): los GIDs de Android se heredan (cosmético)", errno);
+            }
+        }
 
         DIR* self_dir = opendir("/proc/self/fd");
         if (self_dir != NULL) {

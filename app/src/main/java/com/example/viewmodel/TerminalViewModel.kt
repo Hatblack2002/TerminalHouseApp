@@ -69,6 +69,36 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
         startStatsMonitor()
         startBootstrap()
         dismissSplashAfterDelay()
+        registerDeathTelemetry()
+    }
+
+    /**
+     * Task 6 / problema 1: la muerte de un proceso PTY (PRoot/bash) ya no es
+     * invisible. PtyBridge notifica la evidencia real (pid, código/senal, última
+     * salida) y la UI la muestra en la sesión afectada. No se destruye nada aquí:
+     * el siguiente comando relanza PRoot automáticamente.
+     */
+    private fun registerDeathTelemetry() {
+        PtyBridge.deathListener = { info ->
+            val lines = buildList {
+                add(TerminalLine("[motor] Sesión PTY (pid=${info.pid}) terminó: ${info.decoded}.", LineType.SYSTEM))
+                if (info.transcriptTail.isNotEmpty()) {
+                    add(TerminalLine("[motor] Última salida del PTY antes de morir:", LineType.SYSTEM))
+                    info.transcriptTail.forEach { add(TerminalLine("    $it", LineType.OUTPUT)) }
+                }
+                add(TerminalLine("[motor] El próximo comando relanzará PRoot automáticamente (el rootfs NO se toca).", LineType.SYSTEM))
+            }
+            _uiState.update { state ->
+                state.copy(sessions = state.sessions.map { s ->
+                    if (s.id == info.sessionId) s.copy(lines = s.lines + lines) else s
+                })
+            }
+        }
+    }
+
+    override fun onCleared() {
+        PtyBridge.deathListener = null
+        super.onCleared()
     }
 
     private fun dismissSplashAfterDelay() {
@@ -263,9 +293,13 @@ class TerminalViewModel(application: Application) : AndroidViewModel(application
 
             val result = TerminalEngine.executeCommand(input, session.workingDir, app(), activeId)
 
-            val current = _uiState.value.sessions.find { it.id == activeId } ?: return@launch
-            val finalLines = if (result.shouldClear) emptyList() else current.lines + result.lines
-            updateSession(current.copy(lines = finalLines))
+            // Actualización atómica: las líneas de telemetría de muerte (hilo
+            // principal) y el bloque del comando (IO) no se pisan entre sí.
+            _uiState.update { state ->
+                val current = state.sessions.find { it.id == activeId } ?: return@update state
+                val finalLines = if (result.shouldClear) emptyList() else current.lines + result.lines
+                state.copy(sessions = state.sessions.map { if (it.id == current.id) current.copy(lines = finalLines) else it })
+            }
         }
     }
 
