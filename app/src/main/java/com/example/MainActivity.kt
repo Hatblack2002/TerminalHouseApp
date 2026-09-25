@@ -1,16 +1,12 @@
 package com.example
 
-import android.os.Bundle
-import com.example.service.SystemMonitor
+import android.content.res.Configuration
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,9 +16,11 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -42,12 +40,14 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -60,6 +60,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -67,8 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.AboutDialog
-import com.example.ui.components.AiAgentFullPanel
-import com.example.ui.components.AiAgentHomeCard
+import com.example.ui.components.AiAgentSheetContent
 import com.example.ui.components.DrawerContent
 import com.example.ui.components.FilesScreen
 import com.example.ui.components.PackagesScreen
@@ -83,6 +83,7 @@ import com.example.ui.theme.AccentOrange
 import com.example.ui.theme.BackgroundDark
 import com.example.ui.theme.BackgroundLight
 import com.example.ui.theme.StatusOnlineGreen
+import com.example.ui.theme.SurfaceDark
 import com.example.ui.theme.TerminalHouseTheme
 import com.example.ui.theme.TextPrimaryDark
 import com.example.ui.theme.TextSecondaryDark
@@ -90,6 +91,8 @@ import com.example.viewmodel.AppScreen
 import com.example.viewmodel.TerminalUiState
 import com.example.viewmodel.TerminalViewModel
 import kotlinx.coroutines.launch
+
+import android.os.Bundle
 
 class MainActivity : ComponentActivity() {
 
@@ -121,6 +124,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun TerminalHouseApp(
     uiState: TerminalUiState,
@@ -129,6 +133,8 @@ fun TerminalHouseApp(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var showOverflowMenu by remember { mutableStateOf(false) }
+    // v0.3.0 SECCIÓN 3 — subtítulo dinámico real (recompone cuando cambia el bootstrap)
+    val bootstrapStatus by viewModel.bootstrapStatus.collectAsStateWithLifecycle()
 
     // Sync drawer state with ViewModel
     LaunchedEffect(uiState.isDrawerOpen) {
@@ -154,10 +160,13 @@ fun TerminalHouseApp(
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val isTabletOrLandscape = maxWidth >= 600.dp
+        // SECCIÓN 2 — landscape (orientación real) O pantallas anchas (plegables/Dex)
+        val configuration = LocalConfiguration.current
+        val isTabletOrLandscape = maxWidth >= 600.dp ||
+            configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
         if (isTabletOrLandscape) {
-            // Horizontal / Tablet / DeX Mode
+            // Horizontal / Tablet / DeX Mode — terminal 70% + panel IA 30% (SECCIÓN 2)
             TabletDexLayout(
                 currentScreen = uiState.currentScreen,
                 onSelectScreen = { viewModel.setScreen(it) },
@@ -174,7 +183,18 @@ fun TerminalHouseApp(
                 onInsertKey = { viewModel.insertSpecialKey(it) },
                 onQuickAction = { viewModel.executeQuickCommand(it) },
                 onOpenSystemDialog = { viewModel.toggleSystemDialog(true) },
-                onOpenAbout = { viewModel.toggleAboutDialog(true) }
+                onOpenAbout = { viewModel.toggleAboutDialog(true) },
+                subtitle = viewModel.dynamicSubtitle(bootstrapStatus),
+                aiMessages = uiState.aiMessages,
+                aiInputText = uiState.aiInputText,
+                onAiInputChange = { viewModel.onAiInputChange(it) },
+                onAiSendMessage = { viewModel.sendAiMessage(it) },
+                onAiExecuteCommandInTerminal = { cmd ->
+                    viewModel.setScreen(AppScreen.TERMINAL)
+                    viewModel.executeQuickCommand(cmd)
+                },
+                aiContext = uiState.aiContext,
+                onClearAiContext = { viewModel.clearAiContext() }
             )
         } else {
             // Portrait Phone Mode
@@ -200,11 +220,15 @@ fun TerminalHouseApp(
                     modifier = Modifier
                         .fillMaxSize()
                         .statusBarsPadding()
-                        .navigationBarsPadding(),
+                        .navigationBarsPadding()
+                        // v0.3.0 SECCIÓN 9 — el terminal se redimensiona con el teclado;
+                        // nunca se tapa el cursor ni el input del sheet
+                        .imePadding(),
                     containerColor = if (uiState.isDarkMode) BackgroundDark else BackgroundLight,
                     topBar = {
-                        // Official Top App Bar
+                        // Official Top App Bar — subtítulo dinámico real (SECCIÓN 3)
                         PortraitTopBar(
+                            subtitle = viewModel.dynamicSubtitle(bootstrapStatus),
                             onOpenDrawer = { scope.launch { drawerState.open() } },
                             onOpenSystemDialog = { viewModel.toggleSystemDialog(true) },
                             showOverflowMenu = showOverflowMenu,
@@ -216,14 +240,14 @@ fun TerminalHouseApp(
                         )
                     },
                     bottomBar = {
-                        // Official 4-Tab Bottom Navigation Bar
+                        // Official 4-Tab Bottom Navigation Bar — IA abre el sheet (SECCIÓN 10)
                         PortraitBottomNavBar(
                             currentScreen = uiState.currentScreen,
                             onSelectTab = { screen ->
-                                if (screen == AppScreen.MAS) {
-                                    scope.launch { drawerState.open() }
-                                } else {
-                                    viewModel.setScreen(screen)
+                                when (screen) {
+                                    AppScreen.MAS -> scope.launch { drawerState.open() }
+                                    AppScreen.IA -> viewModel.showAiSheet(false)
+                                    else -> viewModel.setScreen(screen)
                                 }
                             }
                         )
@@ -233,55 +257,50 @@ fun TerminalHouseApp(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(innerPadding)
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            // SECCIÓN 1: en TERMINAL el terminal toca los bordes de su
+                            // contenedor (sin márgenes que desperdicien píxeles)
+                            .then(
+                                if (uiState.currentScreen == AppScreen.TERMINAL) Modifier
+                                else Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
                     ) {
                         when (uiState.currentScreen) {
                             AppScreen.TERMINAL -> {
-                                Column(
-                                    modifier = Modifier.fillMaxSize(),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    // Main Terminal view
-                                    TerminalView(
-                                        sessions = uiState.sessions,
-                                        activeSessionId = uiState.activeSessionId,
-                                        currentInput = uiState.currentInput,
-                                        isKeyboardVisible = uiState.isKeyboardVisible,
-                                        onInputChange = { viewModel.onInputChange(it) },
-                                        onSubmitCommand = { viewModel.submitCommand() },
-                                        onSwitchSession = { viewModel.switchSession(it) },
-                                        onAddNewSession = { viewModel.addNewSession() },
-                                        onCloseSession = { viewModel.closeSession(it) },
-                                        onToggleKeyboard = { viewModel.toggleKeyboard() },
-                                        onInsertKey = { viewModel.insertSpecialKey(it) },
-                                        onQuickAction = { viewModel.executeQuickCommand(it) },
-                                        onOpenFileExplorer = { viewModel.setScreen(AppScreen.ARCHIVOS) },
-                                        modifier = Modifier.weight(1f)
-                                    )
-
-                                    // Compact Agente IA card at the bottom of portrait home
-                                    AiAgentHomeCard(
-                                        inputValue = uiState.aiInputText,
-                                        onInputChange = { viewModel.onAiInputChange(it) },
-                                        onSubmit = {
-                                            viewModel.sendAiMessage()
-                                            viewModel.setScreen(AppScreen.IA)
-                                        },
-                                        onExpand = { viewModel.setScreen(AppScreen.IA) }
-                                    )
-                                }
+                                // SECCIÓN 1: el terminal ocupa TODO el espacio entre las
+                                // pestañas y la toolbar; sin panel IA fijo (PROHIBIDO portrait)
+                                TerminalView(
+                                    sessions = uiState.sessions,
+                                    activeSessionId = uiState.activeSessionId,
+                                    currentInput = uiState.currentInput,
+                                    isKeyboardVisible = uiState.isKeyboardVisible,
+                                    onInputChange = { viewModel.onInputChange(it) },
+                                    onSubmitCommand = { viewModel.submitCommand() },
+                                    onSwitchSession = { viewModel.switchSession(it) },
+                                    onAddNewSession = { viewModel.addNewSession() },
+                                    onCloseSession = { viewModel.closeSession(it) },
+                                    onToggleKeyboard = { viewModel.toggleKeyboard() },
+                                    onInsertKey = { viewModel.insertSpecialKey(it) },
+                                    onQuickAction = { viewModel.executeQuickCommand(it) },
+                                    onOpenFileExplorer = { viewModel.setScreen(AppScreen.ARCHIVOS) },
+                                    terminalFontSizeSp = uiState.terminalFontSize,
+                                    liveTail = uiState.liveTail,
+                                    showLivePanel = uiState.isCommandRunning || uiState.isInteractiveMode,
+                                    isInteractiveMode = uiState.isInteractiveMode,
+                                    isCommandRunning = uiState.isCommandRunning,
+                                    onToggleInteractive = { viewModel.setInteractiveMode(!uiState.isInteractiveMode) },
+                                    onHardwareControlKey = { viewModel.onHardwareControlKey(it) },
+                                    onPasteToPty = { viewModel.pasteClipboardToPty() },
+                                    provideCopyText = { action -> viewModel.buildCopyText(action) },
+                                    copyLineCount = { viewModel.copyLineCount() },
+                                    onSendToAi = { viewModel.sendSelectionToAgent(it) },
+                                    onOpenAiSheet = { viewModel.showAiSheet(false) },
+                                    onOpenAiSheetExpanded = { viewModel.showAiSheet(true) },
+                                    modifier = Modifier.fillMaxSize()
+                                )
                             }
                             AppScreen.IA -> {
-                                AiAgentFullPanel(
-                                    messages = uiState.aiMessages,
-                                    inputValue = uiState.aiInputText,
-                                    onInputChange = { viewModel.onAiInputChange(it) },
-                                    onSendMessage = { prompt -> viewModel.sendAiMessage(prompt) },
-                                    onExecuteCommandInTerminal = { cmd ->
-                                        viewModel.setScreen(AppScreen.TERMINAL)
-                                        viewModel.executeQuickCommand(cmd)
-                                    }
-                                )
+                                // v0.3.0: el panel IA es un bottom sheet (SECCIÓN 8); la
+                                // pestaña IA lo abre y el terminal permanece intacto debajo.
                             }
                             AppScreen.PROYECTOS -> {
                                 ProjectsScreen(
@@ -326,7 +345,9 @@ fun TerminalHouseApp(
                             AppScreen.AJUSTES -> {
                                 SettingsScreen(
                                     isDarkMode = uiState.isDarkMode,
-                                    onToggleTheme = { viewModel.toggleTheme() }
+                                    onToggleTheme = { viewModel.toggleTheme() },
+                                    terminalFontSize = uiState.terminalFontSize,
+                                    onFontSizeChange = { viewModel.setTerminalFontSize(it) }
                                 )
                             }
                             AppScreen.MAS -> {
@@ -354,11 +375,48 @@ fun TerminalHouseApp(
                 onDismiss = { viewModel.toggleAboutDialog(false) }
             )
         }
+
+        // v0.3.0 SECCIÓN 8 — Panel IA como bottom sheet (portrait). La sesión del
+        // terminal SIGUE VIVA: vive en el ViewModel, el sheet no la toca. Tap fuera,
+        // arrastrar hacia abajo o ✕ cierran; al cerrar el terminal vuelve intacto.
+        if (!isTabletOrLandscape && uiState.showAiSheet) {
+            val sheetState = rememberModalBottomSheetState(
+                skipPartiallyExpanded = false,
+                confirmValueChange = { true }
+            )
+            ModalBottomSheet(
+                onDismissRequest = { viewModel.hideAiSheet() },
+                sheetState = sheetState,
+                containerColor = SurfaceDark
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(if (uiState.aiSheetExpanded) 0.9f else 0.45f)
+                ) {
+                    AiAgentSheetContent(
+                        messages = uiState.aiMessages,
+                        inputValue = uiState.aiInputText,
+                        onInputChange = { viewModel.onAiInputChange(it) },
+                        onSendMessage = { prompt -> viewModel.sendAiMessage(prompt) },
+                        onExecuteCommandInTerminal = { cmd ->
+                            viewModel.hideAiSheet()
+                            viewModel.setScreen(AppScreen.TERMINAL)
+                            viewModel.executeQuickCommand(cmd)
+                        },
+                        contextText = uiState.aiContext,
+                        onClearContext = { viewModel.clearAiContext() },
+                        onClose = { viewModel.hideAiSheet() }
+                    )
+                }
+            }
+        }
     }
 }
 
 @Composable
 private fun PortraitTopBar(
+    subtitle: String,
     onOpenDrawer: () -> Unit,
     onOpenSystemDialog: () -> Unit,
     showOverflowMenu: Boolean,
@@ -419,9 +477,10 @@ private fun PortraitTopBar(
                     )
                 }
                 Text(
-                    text = SystemMonitor.identitySummaryCached(),
+                    text = subtitle, // v0.3.0 SECCIÓN 3 — dinámico, PROHIBIDO estático
                     color = TextSecondaryDark,
-                    fontSize = 10.5.sp
+                    fontSize = 10.5.sp,
+                    maxLines = 1
                 )
             }
         }

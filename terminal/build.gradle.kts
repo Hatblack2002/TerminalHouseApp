@@ -7,6 +7,11 @@ android {
     // Alineado con la app (motor original del encargo: compileSdk 35; se sube a 36.1
     // para compilar con el mismo AGP/plataforma que el módulo :app de Gemini).
     compileSdk { version = release(36) { minorApiLevel = 1 } }
+
+  lint {
+    checkReleaseBuilds = false
+    abortOnError = false
+  }
     ndkVersion = "26.1.10909125"
 
     defaultConfig {

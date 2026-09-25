@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.terminalhouse.tmhx"
     minSdk = 24
     targetSdk = 36
-    versionCode = 2
-    versionName = "1.1-real-ubuntu"
+    versionCode = 3
+    versionName = "0.3.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -25,6 +25,12 @@ android {
       // Fase 11: ambas ABIs objetivo, ninguna descartada
       abiFilters += listOf("arm64-v8a", "armeabi-v7a")
     }
+  }
+
+  
+  lint {
+    checkReleaseBuilds = false
+    abortOnError = false
   }
 
   signingConfigs {

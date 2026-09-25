@@ -74,7 +74,16 @@ fun TabletDexLayout(
     onQuickAction: (String) -> Unit,
     onOpenSystemDialog: () -> Unit,
     onOpenAbout: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // v0.3.0 — subtítulo dinámico + panel IA persistente al 30% (SECCIÓN 2/3)
+    subtitle: String = "",
+    aiMessages: List<com.example.model.AiMessage> = emptyList(),
+    aiInputText: String = "",
+    onAiInputChange: (String) -> Unit = {},
+    onAiSendMessage: (String?) -> Unit = {},
+    onAiExecuteCommandInTerminal: (String) -> Unit = {},
+    aiContext: String? = null,
+    onClearAiContext: () -> Unit = {}
 ) {
     Row(
         modifier = modifier
@@ -185,9 +194,10 @@ fun TabletDexLayout(
                             )
                         }
                         Text(
-                            text = SystemMonitor.identitySummaryCached(),
+                            text = subtitle.ifBlank { SystemMonitor.identitySummaryCached() },
                             color = TextSecondaryDark,
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
+                            maxLines = 1
                         )
                     }
                 }
@@ -248,14 +258,14 @@ fun TabletDexLayout(
                 }
             }
 
-            // Main Body: Terminal (Center) + AI & Quick Actions (Right)
+            // Main Body: Terminal 70% + Panel IA persistente 30% (SECCIÓN 2)
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Terminal Area
+                // Terminal Area — 70% del ancho
                 TerminalView(
                     sessions = sessions,
                     activeSessionId = activeSessionId,
@@ -270,156 +280,28 @@ fun TabletDexLayout(
                     onInsertKey = onInsertKey,
                     onQuickAction = onQuickAction,
                     onOpenFileExplorer = { onSelectScreen(AppScreen.ARCHIVOS) },
-                    modifier = Modifier.weight(1.4f)
+                    modifier = Modifier.weight(0.7f)
                 )
 
-                // Right Panel: Agente IA + Accesos rápidos
-                Column(
+                // Panel IA — 30% del ancho, panel lateral persistente (NO bottom sheet)
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color(0xFF16161D),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF262634)),
                     modifier = Modifier
-                        .weight(0.9f)
-                        .fillMaxHeight(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                        .weight(0.3f)
+                        .fillMaxHeight()
                 ) {
-                    // Agente IA Card
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = Color(0xFF16161D),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF262634)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.SmartToy,
-                                        contentDescription = null,
-                                        tint = AccentOrange,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Agente IA",
-                                        color = TextPrimaryDark,
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(6.dp)
-                                            .clip(CircleShape)
-                                            .background(StatusOnlineGreen)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "En línea",
-                                        color = StatusOnlineGreen,
-                                        fontSize = 11.5.sp
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            Text(
-                                text = "Hola, soy tu agente IA. Puedo ayudarte a crear apps, instalar herramientas, ejecutar comandos y mucho más.",
-                                color = Color(0xFFCBCBD8),
-                                fontSize = 12.5.sp,
-                                lineHeight = 18.sp
-                            )
-
-                            Spacer(modifier = Modifier.height(14.dp))
-
-                            ElevatedButton(
-                                onClick = { onSelectScreen(AppScreen.IA) },
-                                colors = ButtonDefaults.elevatedButtonColors(
-                                    containerColor = AccentOrange,
-                                    contentColor = Color.White
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(text = "Iniciar chat", fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                    }
-
-                    // Accesos rápidos Card
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = Color(0xFF16161D),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF262634)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.GridView,
-                                    contentDescription = null,
-                                    tint = AccentOrange,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Accesos rápidos",
-                                    color = TextPrimaryDark,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    QuickAccessTile(
-                                        icon = Icons.Default.Code,
-                                        label = "Crear proyecto",
-                                        modifier = Modifier.weight(1f),
-                                        onClick = { onSelectScreen(AppScreen.PROYECTOS) }
-                                    )
-                                    QuickAccessTile(
-                                        icon = Icons.Default.Inventory2,
-                                        label = "Instalar paquete",
-                                        modifier = Modifier.weight(1f),
-                                        onClick = { onSelectScreen(AppScreen.PAQUETES) }
-                                    )
-                                }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    QuickAccessTile(
-                                        icon = Icons.Default.PlayArrow,
-                                        label = "Ejecutar comando",
-                                        modifier = Modifier.weight(1f),
-                                        onClick = { onQuickAction("cat /etc/os-release") }
-                                    )
-                                    QuickAccessTile(
-                                        icon = Icons.Default.Folder,
-                                        label = "Abrir carpeta",
-                                        modifier = Modifier.weight(1f),
-                                        onClick = { onSelectScreen(AppScreen.ARCHIVOS) }
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    AiAgentFullPanel(
+                        messages = aiMessages,
+                        inputValue = aiInputText,
+                        onInputChange = onAiInputChange,
+                        onSendMessage = onAiSendMessage,
+                        onExecuteCommandInTerminal = onAiExecuteCommandInTerminal,
+                        contextText = aiContext,
+                        onClearContext = onClearAiContext,
+                        modifier = Modifier.padding(8.dp)
+                    )
                 }
             }
         }

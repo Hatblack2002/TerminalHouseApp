@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
@@ -49,6 +50,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AiMessage
@@ -211,7 +213,9 @@ fun AiAgentFullPanel(
     onInputChange: (String) -> Unit,
     onSendMessage: (String?) -> Unit,
     onExecuteCommandInTerminal: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    contextText: String? = null,
+    onClearContext: () -> Unit = {}
 ) {
     Column(
         modifier = modifier
@@ -366,6 +370,39 @@ fun AiAgentFullPanel(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        // v0.3.0 — chip de contexto seleccionado en el terminal (SECCIÓN 7/8)
+        if (contextText != null) {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = AccentOrange.copy(alpha = 0.15f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, AccentOrange.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Contexto: ${contextText.length} caracteres (solo la selección)",
+                        color = AccentOrange,
+                        fontSize = 11.5.sp,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    IconButton(onClick = onClearContext, modifier = Modifier.size(24.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Quitar contexto",
+                            tint = AccentOrange,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+        }
+
         // Bottom input row: >_ icon + "Escribe tu solicitud..." + orange > button
         Row(
             modifier = Modifier
@@ -431,6 +468,101 @@ fun AiAgentFullPanel(
                 )
             }
         }
+    }
+}
+
+/**
+ * v0.3.0 SECCIÓN 8 — contenido del bottom sheet del Agente IA.
+ * PRESERVACIÓN: el contenido es EXACTAMENTE el AiAgentFullPanel existente (no se
+ * rediseña); solo se añade el contenedor de sheet: drag handle, botón ✕ y el chip
+ * de contexto cuando llega una selección del terminal (SECCIÓN 7: el agente recibe
+ * SOLO lo enviado).
+ */
+@Composable
+fun AiAgentSheetContent(
+    messages: List<AiMessage>,
+    inputValue: String,
+    onInputChange: (String) -> Unit,
+    onSendMessage: (String?) -> Unit,
+    onExecuteCommandInTerminal: (String) -> Unit,
+    contextText: String? = null,
+    onClearContext: () -> Unit = {},
+    onClose: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxSize()) {
+        // Drag handle del sheet
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(width = 44.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color(0xFF3A3A48))
+            )
+        }
+
+        // Fila con ✕ de cierre (spec SECCIÓN 8: "Tap en ✕ → cierra")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Cerrar panel IA",
+                    tint = Color(0xFFA0A0B0),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+
+        // Chip de contexto recibido desde el terminal (SECCIÓN 7 → SECCIÓN 8)
+        if (contextText != null) {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = AccentOrange.copy(alpha = 0.15f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, AccentOrange.copy(alpha = 0.5f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Contexto del terminal: ${contextText.length} caracteres (el agente solo ve esta selección)",
+                        color = AccentOrange,
+                        fontSize = 11.5.sp,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    IconButton(onClick = onClearContext, modifier = Modifier.size(24.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Quitar contexto",
+                            tint = AccentOrange,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Contenido preservado del panel IA existente
+        AiAgentFullPanel(
+            messages = messages,
+            inputValue = inputValue,
+            onInputChange = onInputChange,
+            onSendMessage = onSendMessage,
+            onExecuteCommandInTerminal = onExecuteCommandInTerminal
+        )
     }
 }
 

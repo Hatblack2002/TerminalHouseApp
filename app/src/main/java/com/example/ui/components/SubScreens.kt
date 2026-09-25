@@ -45,6 +45,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -462,7 +464,9 @@ fun ToolsScreen(
 @Composable
 fun SettingsScreen(
     isDarkMode: Boolean,
-    onToggleTheme: () -> Unit
+    onToggleTheme: () -> Unit,
+    terminalFontSize: Float = 14f,
+    onFontSizeChange: (Float) -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -526,6 +530,42 @@ fun SettingsScreen(
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = AccentOrange,
                             checkedTrackColor = AccentOrange.copy(alpha = 0.4f)
+                        )
+                    )
+                }
+
+                HorizontalDivider(
+                    color = Color(0xFF262634),
+                    modifier = Modifier.padding(vertical = 12.dp)
+                )
+
+                // v0.3.0 SECCIÓN 5 — tamaño de fuente del terminal (rango 10–24)
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Tamaño del terminal",
+                            color = TextPrimaryDark,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "${terminalFontSize.toInt()} sp",
+                            color = AccentOrange,
+                            fontSize = 13.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Slider(
+                        value = terminalFontSize,
+                        onValueChange = { onFontSizeChange(it) },
+                        valueRange = 10f..24f,
+                        steps = 13,
+                        colors = SliderDefaults.colors(
+                            thumbColor = AccentOrange,
+                            activeTrackColor = AccentOrange
                         )
                     )
                 }
